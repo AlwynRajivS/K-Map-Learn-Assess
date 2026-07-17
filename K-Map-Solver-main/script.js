@@ -16,7 +16,10 @@ function reset(){
   render();
 }
 function ui(){$("start").hidden=false;$("check").hidden=true;$("cancel").hidden=true;$("undo").hidden=true;$("finish").hidden=true;$("groupCards").innerHTML="";$("answer").innerHTML="";$("result").className="result";$("result").textContent="Place the required values first."}
-function render(){let q=KM.config(S.V),g=$("grid");g.innerHTML="";g.className="grid "+(q.C===8?"g8":q.C===4?"g4":"g2");$("cols").innerHTML="";$("cols").className="cols "+(q.C===8?"c8":q.C===4?"c4":"c2");$("rows").innerHTML="";$("topAxis").textContent=S.V===5?"E | CD →   (Left layer E=0 • Right layer E=1)":q.cv.join("")+" →";$("sideAxis").textContent=q.rv.join("")+" ↓";
+function render(){let q=KM.config(S.V),g=$("grid");g.innerHTML="";g.className="grid "+(q.C===8?"g8":q.C===4?"g4":"g2");$("cols").innerHTML="";$("cols").className="cols "+(q.C===8?"c8":q.C===4?"c4":"c2");$("rows").innerHTML="";$("topAxis").textContent =
+  S.V === 5
+    ? "CDE →"
+    : q.cv.join("") + " →";$("sideAxis").textContent=q.rv.join("")+" ↓";
 q.cl.forEach(x=>{let d=document.createElement("div");d.textContent=x;$("cols").appendChild(d)});q.rl.forEach(x=>{let d=document.createElement("div");d.className="rlabel";d.textContent=x;$("rows").appendChild(d)});
 for(let r=0;r<q.R;r++)for(let c=0;c<q.C;c++){let i=r*q.C+c,b=document.createElement("button"),v=S.vals[i];b.className="cell "+(v===1?"one":v==="X"?"dc":"zero")+(S.sel.has(i)?" current":"");b.innerHTML='<span class="m">m'+KM.mt(S.V,r,c)+'</span><span class="val">'+v+"</span>";S.groups.forEach((gr,j)=>{if(gr.ids.includes(i)){let o=document.createElement("span");o.className="overlay d"+(j%4+1);o.style.setProperty("--gc",gr.color[0]);o.style.setProperty("--gb",gr.color[1]);b.appendChild(o)}});b.onclick=()=>cell(i);g.appendChild(b)}
 $("instruction").innerHTML=S.phase==="place"?(S.form==="SOP"?"<b>Step 1 — SOP:</b> Place <b>1</b> in required minterms. "+(S.method==="dc"?"Add <b>X</b> at don't-care terms.":"All other cells remain 0."):"<b>Step 1 — POS:</b> The map starts with <b>0</b> in every cell. Tap non-zero cells to change them to <b>1</b>. "+(S.method==="dc"?"Add <b>X</b> where required.":"Keep required maxterms as 0.")):"<b>Grouping:</b> Select one complete group. Previously accepted groups remain visible in transparent colours."}
