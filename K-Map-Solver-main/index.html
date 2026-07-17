@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>K-Map Solver</title><link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><div><h1>🧩 K-Map Solver</h1><p>Place → Group → Verify → Simplify</p></div><button id="theme" class="theme">🌙 Dark</button></header>
+<nav><button class="nav active" data-page="solver">K-Map Solver</button><button class="nav" data-page="wrap">3D Wrapping Tutor</button></nav>
+
+<main id="solverPage" class="page active">
+<section class="toolbar">
+ <div class="seg" id="varTabs"><button data-v="2">2 Variable</button><button data-v="3" class="active">3 Variable</button><button data-v="4">4 Variable</button><button data-v="5">5 Variable</button></div>
+ <select id="form"><option value="SOP">SOP — Group 1s</option><option value="POS">POS — Group 0s</option></select>
+ <select id="method"><option value="normal">Normal Method</option><option value="dc">Don't Care Method</option></select>
+ <button id="clear">Clear Map</button><button id="sample">Load Example</button><button id="resetAll">↺ Reset Solver</button>
+</section>
+<div class="layout">
+<section class="panel">
+ <div id="instruction" class="info"></div>
+ <div class="stage"><div class="mapbox"><div id="topAxis" class="topaxis"></div><div id="cols" class="cols"></div><div class="maprow"><div class="rowhead"><div id="sideAxis" class="sideaxis"></div><div id="rows"></div></div><div id="grid" class="grid"></div></div></div></div>
+ <div class="legend"><span class="key zeroK">0</span><span class="key oneK">1</span><span class="key dcK">X</span> Tap cells to enter values. In grouping mode, tap cells to select one group.</div>
+ <div class="actions"><button id="start" class="primary">Start Grouping</button><button id="check" hidden>✓ Check This Group</button><button id="cancel" hidden>Clear Current Selection</button><button id="undo" hidden>Undo Last Group</button><button id="finish" hidden class="primary">Verify Final Answer</button></div>
+ <div id="result" class="result">Place the required values first.</div>
+ <div id="groupCards"></div><div id="answer"></div>
+</section>
+<aside>
+ <section class="panel"><h3>📘 Correct Workflow</h3><ol><li>Choose SOP or POS.</li><li>Place required values and optional X.</li><li>Make the <b>largest possible</b> valid group.</li><li>Correct groups remain on the map in different transparent colours.</li><li>Each group immediately gives its matching coloured term.</li><li>Final answer is verified only after every required target is covered.</li></ol></section>
+ <section class="panel"><h3>Rules</h3><p>SOP → group <b>1</b> + useful X.</p><p>POS → group <b>0</b> + useful X.</p><p>Sizes: 1, 2, 4, 8, 16, 32.</p><p>5-variable K-Map uses two 4×4 layers (A=0 and A=1). Corresponding cells in both layers are adjacent.</p><p>Rectangles only. Wrapping is allowed. Diagonal grouping is not.</p><p>Groups may overlap.</p></section>
+</aside></div>
+</main>
+
+<main id="wrapPage" class="page">
+<section class="wrapHero panel">
+<h2>📄 3D K-Map Paper Folding & Wrapping Tutor</h2>
+<p>Watch opposite edges physically move, meet and overlap. This demonstrates why cells that look far apart on a flat K-Map are actually adjacent.</p>
+<div class="wrapControls">
+<button data-fold="flat" class="active">Flat Paper</button>
+<button data-fold="lr">Left ↔ Right Fold</button>
+<button data-fold="tb">Top ↔ Bottom Fold</button>
+<button data-fold="corner">Four Corners</button>
+<button id="foldPlay" class="primary">▶ Auto Explain</button>
+<button id="foldReset">↺ Reset</button>
+</div>
+<div class="foldStage">
+<div class="foldScene">
+ <div id="baseSheet" class="baseSheet">
+  <div class="foldGrid">
+   <span>m0</span><span>m1</span><span>m3</span><span>m2</span>
+   <span>m4</span><span>m5</span><span>m7</span><span>m6</span>
+   <span>m12</span><span>m13</span><span>m15</span><span>m14</span>
+   <span>m8</span><span>m9</span><span>m11</span><span>m10</span>
+  </div>
+  <div class="overlapClone">
+   <span>m0</span><span>m1</span><span>m3</span><span>m2</span>
+   <span>m4</span><span>m5</span><span>m7</span><span>m6</span>
+   <span>m12</span><span>m13</span><span>m15</span><span>m14</span>
+   <span>m8</span><span>m9</span><span>m11</span><span>m10</span>
+  </div>
+  <div class="cornerOverlap">
+   <span class="cornerChip c1">m0</span><span class="cornerChip c2">m2</span>
+   <span class="cornerChip c3">m8</span><span class="cornerChip c4">m10</span>
+   <span class="cornerCaption">m0 + m2 + m8 + m10 → one wrapped QUAD</span>
+  </div>
+  <div class="foldWing wingRight"></div><div class="foldWing wingBottom"></div>
+ </div>
+</div>
+</div>
+<div class="edgeLegend"><span class="redEdge">Top Edge</span><span class="blueEdge">Bottom Edge</span><span class="greenEdge">Left Edge</span><span class="orangeEdge">Right Edge</span></div>
+<div id="foldExplain" class="info"><b>Flat paper:</b> Notice the four coloured boundaries. The K-Map rule says opposite boundaries are adjacent. Select a fold to see them physically meet.</div>
+<div class="foldSteps"><div><b>① Identify</b><small>Find opposite edges.</small></div><div><b>② Fold</b><small>Move one edge toward the other.</small></div><div><b>③ Overlap</b><small>Edges meet on top of each other.</small></div><div><b>④ Group</b><small>Use this adjacency for a larger group.</small></div></div>
+</section>
+
+<section class="wrapCards">
+<div class="panel"><h3>↔ Left–Right Wrapping</h3><p>The orange right edge folds toward and overlaps the green left edge. So <b>m0 ↔ m2</b>, <b>m4 ↔ m6</b>, <b>m12 ↔ m14</b>, and <b>m8 ↔ m10</b> are adjacent pairs.</p></div>
+<div class="panel"><h3>↕ Top–Bottom Wrapping</h3><p>The blue bottom edge folds upward and overlaps the red top edge. Therefore row <b>{0,1,3,2}</b> touches row <b>{8,9,11,10}</b>.</p></div>
+<div class="panel"><h3>◰ Four-Corner Wrapping</h3><p>When both directions wrap, <b>m0, m2, m8, m10</b> meet at the boundaries and can form a single quad when their values allow it.</p></div>
+</section>
+
+<section class="panel">
+<h3>🧪 Interactive Wrapping Examples</h3>
+<div class="exampleGrid">
+<button class="wrapExample" data-ex="octet">8 Cells — Top + Bottom</button>
+<button class="wrapExample" data-ex="edgecols">8 Cells — Left + Right</button>
+<button class="wrapExample" data-ex="corners">4 Cells — Four Corners</button><button class="wrapExample" data-ex="cornerGroup">Corner Quad Grouping</button>
+<button class="wrapExample" data-ex="pairlr">Pair — m0 & m2</button>
+<button class="wrapExample" data-ex="pairtb">Pair — m0 & m2</button>
+</div>
+<div id="exampleExplain" class="info">Select an example. The related cells will be highlighted on the paper.</div>
+</section>
+</main>
+  <footer class="site-footer">
+  © 2026 Developed and Maintained by S. Alwyn Rajiv, AP/ECE
+</footer>
+<script src="kmap.js"></script><script src="solver.js"></script><script src="animation.js"></script><script src="script.js"></script>
+
+</body></html>

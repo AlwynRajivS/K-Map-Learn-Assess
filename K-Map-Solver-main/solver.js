@@ -1,0 +1,9 @@
+const Solver={
+ cyclic(a,n){if(a.length===n)return true;return KM.intervals(n).some(x=>x.length===a.length&&a.every(y=>x.includes(y)))},
+ valid(ids,state){let q=KM.config(state.V),n=ids.length,t=state.form==="SOP"?1:0;if(!n||(n&(n-1)))return false;if(ids.some(i=>state.vals[i]!==t&&state.vals[i]!=="X"))return false;if(ids.every(i=>state.vals[i]==="X"))return false;let rs=[...new Set(ids.map(i=>Math.floor(i/q.C)))],cs=[...new Set(ids.map(i=>i%q.C))];if(rs.length*cs.length!==n||!this.cyclic(rs,q.R)||!this.cyclic(cs,q.C))return false;return rs.every(r=>cs.every(c=>ids.includes(r*q.C+c)))},
+ all(state){let q=KM.config(state.V),out=[],seen=new Set;KM.intervals(q.R).forEach(rs=>KM.intervals(q.C).forEach(cs=>{let ids=[];rs.forEach(r=>cs.forEach(c=>ids.push(r*q.C+c)));ids.sort((a,b)=>a-b);let k=ids.join();if(!seen.has(k)&&this.valid(ids,state)){seen.add(k);out.push(ids)}}));return out},
+ maximal(ids,state){return !this.all(state).some(g=>g.length>ids.length&&ids.every(i=>g.includes(i)))},
+ term(ids,state){let q=KM.config(state.V),names=q.rv.concat(q.cv),arr=ids.map(i=>{let r=Math.floor(i/q.C),c=i%q.C;return(q.rl[r]+q.cl[c]).split("").map(Number)}),fix=[];for(let j=0;j<state.V;j++){let x=arr[0][j];if(arr.every(a=>a[j]===x))fix.push([names[j],x])}if(state.form==="SOP")return fix.length?fix.map(z=>z[1]?z[0]:z[0]+"'").join(""):"1";return fix.length?"("+fix.map(z=>z[1]?z[0]+"'":z[0]).join(" + ")+")":"0"},
+ required(state){let t=state.form==="SOP"?1:0;return state.vals.map((v,i)=>v===t?i:-1).filter(i=>i>=0)},
+ minimumCount(state){let req=this.required(state),c=this.all(state).filter(g=>this.maximal(g,state));if(!req.length)return 0;if(c.length>20)return null;let best=Infinity;for(let m=1;m<(1<<c.length);m++){let cov=new Set,n=0;for(let i=0;i<c.length;i++)if(m&(1<<i)){n++;c[i].forEach(x=>{if(state.vals[x]!=="X")cov.add(x)})}if(n<best&&req.every(x=>cov.has(x)))best=n}return best}
+};
