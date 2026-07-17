@@ -1,27 +1,22 @@
 const Solver = {
 
   /* =========================================================
-     BASIC HELPERS
+     CHECK CYCLIC / WRAPPING INTERVAL
+     Used for 2V, 3V and 4V K-Maps
      ========================================================= */
+  cyclic(a, n) {
+    if (a.length === n) return true;
 
-  isPowerOfTwo(n) {
-    return n > 0 && (n & (n - 1)) === 0;
+    return KM.intervals(n).some(x =>
+      x.length === a.length &&
+      a.every(y => x.includes(y))
+    );
   },
 
-  bits(minterm, variables) {
-    const out = [];
 
-    for (let i = variables - 1; i >= 0; i--) {
-      out.push((minterm >> i) & 1);
-    }
-
-    return out;
-  },
-
-  /*
-     Convert displayed K-Map cell index
-     into the actual minterm/maxterm number.
-  */
+  /* =========================================================
+     CONVERT DISPLAY CELL INDEX TO ACTUAL MINTERM
+     ========================================================= */
   indexToMinterm(index, state) {
     const q = KM.config(state.V);
 
@@ -31,208 +26,160 @@ const Solver = {
     return KM.mt(state.V, r, c);
   },
 
-  /*
-     Convert actual minterm/maxterm number
-     back to displayed K-Map cell index.
-  */
-  mintermToIndex(minterm, state) {
-    const q = KM.config(state.V);
 
-    for (let r = 0; r < q.R; r++) {
+  /* =========================================================
+     CONVERT MINTERM TO BINARY BITS
+     
+     Example for 5 Variables:
+     
+     m0  = 00000
+     m2  = 00010
+     m4  = 00100
+     m6  = 00110
+     m16 = 10000
+     
+     ========================================================= */
+  bits(minterm, variables) {
 
-      for (let c = 0; c < q.C; c++) {
+    const result = [];
 
-        if (
-          KM.mt(state.V, r, c) ===
-          Number(minterm)
-        ) {
-
-          return r * q.C + c;
-
-        }
-
-      }
-
+    for (let i = variables - 1; i >= 0; i--) {
+      result.push(
+        (minterm >> i) & 1
+      );
     }
 
-    return -1;
+    return result;
   },
 
 
   /* =========================================================
-     BOOLEAN CUBE VALIDATION
-
-     Used for 2, 3, 4 and 5 variable K-Maps.
-
-     This automatically handles:
-
-     ✓ Normal groups
-     ✓ Horizontal wrapping
-     ✓ Vertical wrapping
-     ✓ Four-corner wrapping
-     ✓ 5-variable cross-layer groups
-     ✓ Cross-layer + wrapping
-     ✓ Groups of 1, 2, 4, 8, 16, 32
+     5-VARIABLE K-MAP GROUP VALIDATION
+     
+     A valid group must represent a Boolean cube.
+     
+     Example:
+     
+     m0, m2, m4, m6,
+     m16, m18, m20, m22
+     
+     Binary:
+     
+     00000
+     00010
+     00100
+     00110
+     10000
+     10010
+     10100
+     10110
+     
+     Constants:
+     
+     B = 0
+     E = 0
+     
+     Therefore:
+     
+     B'E'
+     
+     Group Size = 8
      ========================================================= */
-
-  validCube(minterms, variables) {
+  validCube5(minterms) {
 
     const ids = [
       ...new Set(
         minterms.map(Number)
       )
-    ].sort((a, b) => a - b);
+    ];
 
-
-    if (!ids.length) {
-      return false;
-    }
-
-
-    if (!this.isPowerOfTwo(ids.length)) {
-      return false;
-    }
-
-
+    // Valid group sizes
     if (
-      ids.length >
-      Math.pow(2, variables)
+      ![1, 2, 4, 8, 16, 32]
+        .includes(ids.length)
     ) {
       return false;
     }
 
+    // Convert all minterms into A B C D E bits
+    const rows = ids.map(
+      m => this.bits(m, 5)
+    );
 
-    const binaryRows =
-      ids.map(
-        m =>
-          this.bits(
-            m,
-            variables
-          )
-      );
-
-
-    /*
-       Find constant variables.
-    */
-
+    // Find constant variables
     const fixed = [];
 
+    for (let v = 0; v < 5; v++) {
 
-    for (
-      let variable = 0;
-      variable < variables;
-      variable++
-    ) {
+      const values = new Set(
+        rows.map(r => r[v])
+      );
 
-      const first =
-        binaryRows[0][variable];
-
-
-      if (
-        binaryRows.every(
-          row =>
-            row[variable] === first
-        )
-      ) {
+      // Variable is constant
+      if (values.size === 1) {
 
         fixed.push({
-          index: variable,
-          value: first
+          index: v,
+          value: rows[0][v]
         });
 
       }
-
     }
 
+    // Variables that are changing
+    const freeCount =
+      5 - fixed.length;
 
-    /*
-       Remaining variables are free.
-
-       If there are K free variables,
-       group size must be 2^K.
-    */
-
-    const freeVariables =
-      variables -
-      fixed.length;
-
-
-    const expectedSize =
-      Math.pow(
-        2,
-        freeVariables
-      );
-
-
+    // Complete Boolean cube must contain
+    // exactly 2^(number of changing variables)
     if (
       ids.length !==
-      expectedSize
+      Math.pow(2, freeCount)
     ) {
       return false;
     }
 
-
     /*
-       Generate complete Boolean cube
-       represented by fixed variables.
+       Generate every minterm that satisfies
+       the constant-variable conditions.
+
+       This ensures the selected cells form
+       one complete Boolean cube.
     */
 
     const expected = [];
 
-    const total =
-      Math.pow(
-        2,
-        variables
+    for (let m = 0; m < 32; m++) {
+
+      const b = this.bits(m, 5);
+
+      const match = fixed.every(
+        f => b[f.index] === f.value
       );
 
-
-    for (
-      let m = 0;
-      m < total;
-      m++
-    ) {
-
-      const b =
-        this.bits(
-          m,
-          variables
-        );
-
-
-      const matches =
-        fixed.every(
-          f =>
-            b[f.index] ===
-            f.value
-        );
-
-
-      if (matches) {
-
-        expected.push(
-          m
-        );
-
+      if (match) {
+        expected.push(m);
       }
-
     }
 
+    const selected =
+      ids.slice().sort(
+        (a, b) => a - b
+      );
 
     expected.sort(
-      (a, b) =>
-        a - b
+      (a, b) => a - b
     );
 
-
+    // Selected minterms must exactly
+    // match the complete cube
     return (
-      ids.length ===
+      selected.length ===
         expected.length &&
 
-      ids.every(
-        (m, i) =>
-          m ===
-          expected[i]
+      selected.every(
+        (x, i) =>
+          x === expected[i]
       )
     );
   },
@@ -240,76 +187,12 @@ const Solver = {
 
   /* =========================================================
      MAIN GROUP VALIDATION
-
-     SOP:
-       Groups 1 and X
-
-     POS:
-       Groups 0 and X
      ========================================================= */
-
   valid(ids, state) {
 
-    if (
-      !Array.isArray(ids) ||
-      !ids.length
-    ) {
-      return false;
-    }
+    const q = KM.config(state.V);
 
-
-    const uniqueIds = [
-      ...new Set(ids)
-    ];
-
-
-    /*
-       Duplicate cells are invalid.
-    */
-
-    if (
-      uniqueIds.length !==
-      ids.length
-    ) {
-      return false;
-    }
-
-
-    const n =
-      uniqueIds.length;
-
-
-    /*
-       Group must have power-of-two size.
-    */
-
-    if (
-      !this.isPowerOfTwo(n)
-    ) {
-      return false;
-    }
-
-
-    /*
-       Maximum group size depends
-       on number of variables.
-    */
-
-    if (
-      n >
-      Math.pow(
-        2,
-        state.V
-      )
-    ) {
-      return false;
-    }
-
-
-    /*
-       SOP → target 1
-       POS → target 0
-    */
+    const n = ids.length;
 
     const target =
       state.form === "SOP"
@@ -317,18 +200,34 @@ const Solver = {
         : 0;
 
 
-    /*
-       Check every selected cell.
+    // -----------------------------------------
+    // Group cannot be empty
+    // -----------------------------------------
 
-       SOP:
-       1 and X allowed.
+    if (!n) {
+      return false;
+    }
 
-       POS:
-       0 and X allowed.
-    */
+
+    // -----------------------------------------
+    // Group size must be power of 2
+    // 1, 2, 4, 8, 16, 32
+    // -----------------------------------------
+
+    if (n & (n - 1)) {
+      return false;
+    }
+
+
+    // -----------------------------------------
+    // Check cell values
+    //
+    // SOP → 1 or X
+    // POS → 0 or X
+    // -----------------------------------------
 
     if (
-      uniqueIds.some(
+      ids.some(
         i =>
           state.vals[i] !== target &&
           state.vals[i] !== "X"
@@ -338,16 +237,12 @@ const Solver = {
     }
 
 
-    /*
-       Don't Care only group is invalid.
-
-       A group must cover at least
-       one actual 1 for SOP
-       or one actual 0 for POS.
-    */
+    // -----------------------------------------
+    // Group cannot contain only Don't Cares
+    // -----------------------------------------
 
     if (
-      uniqueIds.every(
+      ids.every(
         i =>
           state.vals[i] === "X"
       )
@@ -356,488 +251,602 @@ const Solver = {
     }
 
 
-    /*
-       Convert displayed indexes
-       into actual minterm/maxterm numbers.
-    */
+    /* =====================================================
+       SPECIAL 5-VARIABLE VALIDATION
+       ===================================================== */
 
-    const minterms =
-      uniqueIds.map(
-        i =>
-          this.indexToMinterm(
-            i,
-            state
-          )
+    if (state.V === 5) {
+
+      // Convert display indexes
+      // to actual minterms
+
+      const minterms =
+        ids.map(
+          i =>
+            this.indexToMinterm(
+              i,
+              state
+            )
+        );
+
+      return this.validCube5(
+        minterms
       );
+    }
 
 
-    /*
-       Validate Boolean cube.
+    /* =====================================================
+       EXISTING 2V / 3V / 4V VALIDATION
+       ===================================================== */
 
-       Same logic works for
-       SOP and POS.
-    */
+    const rs = [
+      ...new Set(
+        ids.map(
+          i =>
+            Math.floor(
+              i / q.C
+            )
+        )
+      )
+    ];
 
-    return this.validCube(
-      minterms,
-      state.V
+
+    const cs = [
+      ...new Set(
+        ids.map(
+          i =>
+            i % q.C
+        )
+      )
+    ];
+
+
+    // Selected cells must form rectangle
+
+    if (
+      rs.length *
+        cs.length !==
+      n
+    ) {
+      return false;
+    }
+
+
+    // Check row wrapping
+
+    if (
+      !this.cyclic(
+        rs,
+        q.R
+      )
+    ) {
+      return false;
+    }
+
+
+    // Check column wrapping
+
+    if (
+      !this.cyclic(
+        cs,
+        q.C
+      )
+    ) {
+      return false;
+    }
+
+
+    // Every cell inside rectangle
+    // must be selected
+
+    return rs.every(
+      r =>
+        cs.every(
+          c =>
+            ids.includes(
+              r * q.C + c
+            )
+        )
     );
   },
 
 
   /* =========================================================
-     GENERATE ALL VALID K-MAP GROUPS
-
-     Each variable has 3 possible states:
-
-       0 → Fixed at 0
-       1 → Fixed at 1
-       2 → Free / changing
-
-     Therefore:
-
-     2-variable → 3² = 9 cube patterns
-     3-variable → 3³ = 27
-     4-variable → 3⁴ = 81
-     5-variable → 3⁵ = 243
-
-     Very efficient for K-Maps.
+     GENERATE ALL POSSIBLE VALID GROUPS
      ========================================================= */
-
   all(state) {
 
-    const variables =
-      state.V;
+    const q =
+      KM.config(state.V);
 
-
-    const result = [];
+    const out = [];
 
     const seen =
       new Set();
 
 
-    const totalPatterns =
-      Math.pow(
-        3,
-        variables
-      );
+    /* =====================================================
+       SPECIAL 5-VARIABLE GROUP GENERATION
+       
+       Generate Boolean cubes based on fixed/free variables.
+       This includes groups crossing the two displayed layers.
+       ===================================================== */
 
-
-    const totalMinterms =
-      Math.pow(
-        2,
-        variables
-      );
-
-
-    for (
-      let patternNumber = 0;
-      patternNumber <
-      totalPatterns;
-      patternNumber++
-    ) {
-
-      let value =
-        patternNumber;
-
-
-      const pattern = [];
-
+    if (state.V === 5) {
 
       /*
-         Decode ternary pattern.
+         Each variable can be:
 
-         0 = fixed zero
-         1 = fixed one
-         2 = free
+         -1 = changing/free
+          0 = fixed at 0
+          1 = fixed at 1
+
+         3^5 = 243 possible cube patterns.
       */
 
-      for (
-        let v = 0;
-        v < variables;
-        v++
-      ) {
-
-        pattern.push(
-          value % 3
-        );
-
-
-        value =
-          Math.floor(
-            value / 3
-          );
-
-      }
-
-
-      /*
-         Generate all minterms
-         belonging to this cube.
-      */
-
-      const minterms = [];
-
+      const patterns =
+        Math.pow(3, 5);
 
       for (
-        let m = 0;
-        m <
-        totalMinterms;
-        m++
+        let pattern = 0;
+        pattern < patterns;
+        pattern++
       ) {
 
-        const binary =
-          this.bits(
-            m,
-            variables
-          );
+        let x = pattern;
 
-
-        let matches =
-          true;
-
+        const condition = [];
 
         for (
           let v = 0;
-          v <
-          variables;
+          v < 5;
           v++
         ) {
 
-          if (
-            pattern[v] !== 2 &&
-            binary[v] !==
-              pattern[v]
-          ) {
+          condition.push(
+            x % 3
+          );
 
-            matches =
-              false;
-
-            break;
-
-          }
-
+          x =
+            Math.floor(
+              x / 3
+            );
         }
 
 
-        if (matches) {
+        const minterms = [];
 
-          minterms.push(
-            m
-          );
-
-        }
-
-      }
-
-
-      /*
-         Convert minterms to
-         displayed K-Map indexes.
-      */
-
-      const ids = [];
-
-
-      for (
-        const m of minterms
-      ) {
-
-        const index =
-          this.mintermToIndex(
-            m,
-            state
-          );
-
-
-        if (
-          index >= 0
+        for (
+          let m = 0;
+          m < 32;
+          m++
         ) {
 
-          ids.push(
-            index
-          );
+          const b =
+            this.bits(
+              m,
+              5
+            );
 
+          let match = true;
+
+          for (
+            let v = 0;
+            v < 5;
+            v++
+          ) {
+
+            /*
+               condition:
+
+               0 → fixed 0
+               1 → fixed 1
+               2 → free
+            */
+
+            if (
+              condition[v] !== 2 &&
+              b[v] !==
+                condition[v]
+            ) {
+
+              match = false;
+
+              break;
+            }
+          }
+
+          if (match) {
+            minterms.push(m);
+          }
         }
 
-      }
 
+        // Convert minterms back
+        // into displayed cell indexes
 
-      ids.sort(
-        (a, b) =>
-          a - b
-      );
+        const ids = [];
 
+        for (
+          let i = 0;
+          i <
+          q.R * q.C;
+          i++
+        ) {
 
-      const key =
-        ids.join(",");
-
-
-      /*
-         Keep only valid SOP/POS groups.
-      */
-
-      if (
-        ids.length &&
-        !seen.has(key) &&
-        this.valid(
-          ids,
-          state
-        )
-      ) {
-
-        seen.add(
-          key
-        );
-
-
-        result.push(
-          ids
-        );
-
-      }
-
-    }
-
-
-    return result;
-  },
-
-
-  /* =========================================================
-     MAXIMAL GROUP CHECK
-
-     Rejects smaller group if
-     a larger valid group contains it.
-
-     Example:
-
-     If valid octet exists,
-     selecting only a quad is rejected.
-     ========================================================= */
-
-  maximal(ids, state) {
-
-    const groups =
-      this.all(
-        state
-      );
-
-
-    return !groups.some(
-      group =>
-
-        group.length >
-          ids.length &&
-
-        ids.every(
-          cell =>
-            group.includes(
-              cell
-            )
-        )
-
-    );
-  },
-
-
-  /* =========================================================
-     FIND CONSTANT VARIABLES
-     ========================================================= */
-
-  fixedVariables(ids, state) {
-
-    const names =
-      ["A", "B", "C", "D", "E"]
-        .slice(
-          0,
-          state.V
-        );
-
-
-    const rows =
-      ids.map(
-        index => {
-
-          const minterm =
+          const m =
             this.indexToMinterm(
-              index,
+              i,
               state
             );
 
+          if (
+            minterms.includes(m)
+          ) {
+            ids.push(i);
+          }
+        }
 
-          return this.bits(
-            minterm,
-            state.V
+
+        ids.sort(
+          (a, b) => a - b
+        );
+
+
+        const key =
+          ids.join(",");
+
+
+        if (
+          ids.length &&
+          !seen.has(key) &&
+          this.valid(
+            ids,
+            state
+          )
+        ) {
+
+          seen.add(key);
+
+          out.push(ids);
+
+        }
+      }
+
+
+      return out;
+    }
+
+
+    /* =====================================================
+       2V / 3V / 4V
+       Existing rectangle generation
+       ===================================================== */
+
+    KM.intervals(
+      q.R
+    ).forEach(
+      rs =>
+
+        KM.intervals(
+          q.C
+        ).forEach(
+          cs => {
+
+            const ids = [];
+
+            rs.forEach(
+              r =>
+
+                cs.forEach(
+                  c =>
+
+                    ids.push(
+                      r *
+                      q.C +
+                      c
+                    )
+
+                )
+
+            );
+
+
+            ids.sort(
+              (a, b) =>
+                a - b
+            );
+
+
+            const key =
+              ids.join();
+
+
+            if (
+              !seen.has(key) &&
+              this.valid(
+                ids,
+                state
+              )
+            ) {
+
+              seen.add(key);
+
+              out.push(ids);
+
+            }
+
+          }
+        )
+
+    );
+
+
+    return out;
+  },
+
+
+  /* =========================================================
+     CHECK WHETHER SELECTED GROUP IS MAXIMAL
+     ========================================================= */
+  maximal(ids, state) {
+
+    return !this
+      .all(state)
+      .some(
+        g =>
+
+          g.length >
+            ids.length &&
+
+          ids.every(
+            i =>
+              g.includes(i)
+          )
+
+      );
+  },
+
+
+  /* =========================================================
+     GENERATE BOOLEAN TERM FOR GROUP
+     ========================================================= */
+  term(ids, state) {
+
+    const q =
+      KM.config(state.V);
+
+
+    /* =====================================================
+       SPECIAL 5-VARIABLE TERM GENERATION
+       ===================================================== */
+
+    if (
+      state.V === 5
+    ) {
+
+      const names =
+        [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E"
+        ];
+
+
+      const arr =
+        ids.map(
+          i => {
+
+            const m =
+              this.indexToMinterm(
+                i,
+                state
+              );
+
+            return this.bits(
+              m,
+              5
+            );
+
+          }
+        );
+
+
+      const fixed = [];
+
+
+      for (
+        let j = 0;
+        j < 5;
+        j++
+      ) {
+
+        const value =
+          arr[0][j];
+
+
+        if (
+          arr.every(
+            a =>
+              a[j] ===
+              value
+          )
+        ) {
+
+          fixed.push(
+            [
+              names[j],
+              value
+            ]
           );
+
+        }
+      }
+
+
+      // SOP term
+
+      if (
+        state.form ===
+        "SOP"
+      ) {
+
+        return fixed.length
+
+          ? fixed
+              .map(
+                z =>
+                  z[1]
+                    ? z[0]
+                    : z[0] + "'"
+              )
+              .join("")
+
+          : "1";
+      }
+
+
+      // POS term
+
+      return fixed.length
+
+        ? "(" +
+
+          fixed
+            .map(
+              z =>
+                z[1]
+                  ? z[0] + "'"
+                  : z[0]
+            )
+            .join(" + ")
+
+          + ")"
+
+        : "0";
+    }
+
+
+    /* =====================================================
+       EXISTING 2V / 3V / 4V TERM GENERATION
+       ===================================================== */
+
+    const names =
+      q.rv.concat(
+        q.cv
+      );
+
+
+    const arr =
+      ids.map(
+        i => {
+
+          const r =
+            Math.floor(
+              i / q.C
+            );
+
+          const c =
+            i %
+            q.C;
+
+          return (
+            q.rl[r] +
+            q.cl[c]
+          )
+            .split("")
+            .map(Number);
 
         }
       );
 
 
-    const fixed = [];
+    const fix = [];
 
 
     for (
-      let variable = 0;
-      variable <
+      let j = 0;
+      j <
       state.V;
-      variable++
+      j++
     ) {
 
-      const value =
-        rows[0][variable];
+      const x =
+        arr[0][j];
 
 
       if (
-        rows.every(
-          row =>
-            row[variable] ===
-            value
+        arr.every(
+          a =>
+            a[j] === x
         )
       ) {
 
-        fixed.push({
-
-          name:
-            names[variable],
-
-          value:
-            value
-
-        });
+        fix.push(
+          [
+            names[j],
+            x
+          ]
+        );
 
       }
-
     }
 
 
-    return fixed;
-  },
-
-
-  /* =========================================================
-     GENERATE GROUP EXPRESSION
-
-     SOP:
-       Fixed 0 → Complemented
-       Fixed 1 → Normal
-
-     POS:
-       Fixed 0 → Normal
-       Fixed 1 → Complemented
-     ========================================================= */
-
-  term(ids, state) {
-
-    const fixed =
-      this.fixedVariables(
-        ids,
-        state
-      );
-
-
-    /* ==========================
-       SOP TERM
-       ========================== */
+    // SOP
 
     if (
-      state.form === "SOP"
+      state.form ===
+      "SOP"
     ) {
 
+      return fix.length
 
-      /*
-         Full K-Map group.
+        ? fix
+            .map(
+              z =>
+                z[1]
+                  ? z[0]
+                  : z[0] + "'"
+            )
+            .join("")
 
-         All variables eliminated.
-      */
-
-      if (
-        !fixed.length
-      ) {
-
-        return "1";
-
-      }
-
-
-      return fixed
-
-        .map(
-          item =>
-
-            item.value === 1
-
-              ? item.name
-
-              : item.name + "'"
-        )
-
-        .join("");
+        : "1";
 
     }
 
 
-    /* ==========================
-       POS TERM
-       ========================== */
+    // POS
 
+    return fix.length
 
-    /*
-       Full K-Map zero group.
+      ? "(" +
 
-       Function is always zero.
-    */
+        fix
+          .map(
+            z =>
+              z[1]
+                ? z[0] + "'"
+                : z[0]
+          )
+          .join(" + ")
 
-    if (
-      !fixed.length
-    ) {
+        + ")"
 
-      return "0";
-
-    }
-
-
-    return (
-
-      "(" +
-
-      fixed
-
-        .map(
-          item =>
-
-            item.value === 1
-
-              ? item.name + "'"
-
-              : item.name
-        )
-
-        .join(" + ")
-
-      + ")"
-
-    );
+      : "0";
   },
 
 
   /* =========================================================
      GET REQUIRED CELLS
-
-     SOP:
-       Required cells = 1
-
-     POS:
-       Required cells = 0
-
-     Don't Care cells are optional.
      ========================================================= */
-
   required(state) {
 
     const target =
-      state.form === "SOP"
+      state.form ===
+      "SOP"
         ? 1
         : 0;
 
@@ -845,196 +854,59 @@ const Solver = {
     return state.vals
 
       .map(
-        (value, index) =>
-
-          value === target
-
-            ? index
-
+        (v, i) =>
+          v === target
+            ? i
             : -1
       )
 
       .filter(
-        index =>
-          index >= 0
+        i =>
+          i >= 0
       );
   },
 
 
   /* =========================================================
-     GET MAXIMAL GROUPS
+     CALCULATE MINIMUM NUMBER OF GROUPS
      ========================================================= */
-
-  maximalGroups(state) {
-
-    const groups =
-      this.all(
-        state
-      );
-
-
-    return groups.filter(
-      group =>
-
-        !groups.some(
-          other =>
-
-            other.length >
-              group.length &&
-
-            group.every(
-              cell =>
-                other.includes(
-                  cell
-                )
-            )
-
-        )
-
-    );
-  },
-
-
-  /* =========================================================
-     MINIMUM NUMBER OF GROUPS
-
-     Finds minimum number of groups
-     required to cover all mandatory cells.
-
-     Works for:
-       SOP
-       POS
-       Don't Care
-       2V
-       3V
-       4V
-       5V
-     ========================================================= */
-
   minimumCount(state) {
 
-    const required =
+    const req =
       this.required(
         state
       );
 
 
-    /*
-       No required cells.
-    */
+    const candidates =
+      this
+        .all(state)
+        .filter(
+          g =>
+            this.maximal(
+              g,
+              state
+            )
+        );
+
 
     if (
-      !required.length
+      !req.length
     ) {
-
       return 0;
-
     }
 
 
     /*
-       Get only maximal valid groups.
+       Avoid exponential search
+       if too many candidate groups exist.
     */
-
-    const groups =
-      this.maximalGroups(
-        state
-      );
-
 
     if (
-      !groups.length
+      candidates.length >
+      20
     ) {
-
       return null;
-
-    }
-
-
-    const requiredSet =
-      new Set(
-        required
-      );
-
-
-    /*
-       Calculate which mandatory cells
-       each group covers.
-    */
-
-    const coverage =
-      groups.map(
-        group =>
-
-          group.filter(
-            cell =>
-              requiredSet.has(
-                cell
-              )
-          )
-      );
-
-
-    /*
-       Find candidate groups
-       for each required cell.
-    */
-
-    const cellGroups =
-      new Map();
-
-
-    required.forEach(
-      cell => {
-
-        cellGroups.set(
-          cell,
-          []
-        );
-
-      }
-    );
-
-
-    coverage.forEach(
-      (cells, groupIndex) => {
-
-        cells.forEach(
-          cell => {
-
-            cellGroups
-              .get(cell)
-              .push(
-                groupIndex
-              );
-
-          }
-        );
-
-      }
-    );
-
-
-    /*
-       If a required cell has
-       no possible group,
-       solution is impossible.
-    */
-
-    for (
-      const cell of required
-    ) {
-
-      if (
-        !cellGroups
-          .get(cell)
-          .length
-      ) {
-
-        return null;
-
-      }
-
     }
 
 
@@ -1042,152 +914,78 @@ const Solver = {
       Infinity;
 
 
-    /*
-       Recursive minimum-cover search.
-    */
+    for (
+      let mask = 1;
+      mask <
+      (1 << candidates.length);
+      mask++
+    ) {
 
-    const search =
-      (
-        covered,
-        used
-      ) => {
+      const covered =
+        new Set();
+
+      let groupCount =
+        0;
 
 
-        /*
-           Stop searching if current
-           solution is already worse.
-        */
+      for (
+        let i = 0;
+        i <
+        candidates.length;
+        i++
+      ) {
 
         if (
-          used >= best
+          mask &
+          (1 << i)
         ) {
 
-          return;
+          groupCount++;
+
+
+          candidates[i]
+            .forEach(
+              cell => {
+
+                if (
+                  state.vals[cell] !==
+                  "X"
+                ) {
+
+                  covered.add(
+                    cell
+                  );
+
+                }
+
+              }
+            );
 
         }
+      }
 
 
-        /*
-           Find uncovered required cell
-           having fewest group choices.
-        */
+      if (
+        groupCount <
+          best &&
 
-        let nextCell =
-          null;
-
-
-        let options =
-          null;
-
-
-        for (
-          const cell of required
-        ) {
-
-          if (
+        req.every(
+          cell =>
             covered.has(
               cell
             )
-          ) {
+        )
+      ) {
 
-            continue;
+        best =
+          groupCount;
 
-          }
-
-
-          const possible =
-            cellGroups.get(
-              cell
-            );
+      }
+    }
 
 
-          if (
-            options === null ||
-            possible.length <
-              options.length
-          ) {
-
-            nextCell =
-              cell;
-
-
-            options =
-              possible;
-
-          }
-
-        }
-
-
-        /*
-           All required cells covered.
-        */
-
-        if (
-          nextCell === null
-        ) {
-
-          best =
-            Math.min(
-              best,
-              used
-            );
-
-
-          return;
-
-        }
-
-
-        /*
-           Try candidate groups.
-        */
-
-        for (
-          const groupIndex
-          of options
-        ) {
-
-          const nextCovered =
-            new Set(
-              covered
-            );
-
-
-          coverage[
-            groupIndex
-          ].forEach(
-            cell => {
-
-              nextCovered.add(
-                cell
-              );
-
-            }
-          );
-
-
-          search(
-            nextCovered,
-            used + 1
-          );
-
-        }
-
-      };
-
-
-    search(
-      new Set(),
-      0
-    );
-
-
-    return best ===
-      Infinity
-
+    return best === Infinity
       ? null
-
       : best;
   }
 
