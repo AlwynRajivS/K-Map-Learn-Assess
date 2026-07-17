@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>K-Map Lab — Learning &amp; Assessment Platform</title>
+<meta name="theme-color" content="#0A0E1A" />
+<meta name="description" content="Learn Karnaugh map minimization step by step, then prove it under timed assessment." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root[data-theme="dark"]{
+    --bg:#080B14;
+    --bg-2:#0D1220;
+    --panel:#111827;
+    --panel-2:#151E30;
+    --ink:#E9EDF7;
+    --ink-dim:#8D98B4;
+    --accent:#2FE1C4;
+    --accent-ink:#04241F;
+    --accent-2:#F5A623;
+    --accent-2-ink:#2B1B00;
+    --accent-3:#9C8CFF;
+    --border:rgba(233,237,247,0.09);
+    --border-strong:rgba(233,237,247,0.16);
+    --glow-a:rgba(47,225,196,0.35);
+    --glow-b:rgba(245,166,35,0.30);
+    --shadow: 0 20px 60px rgba(0,0,0,0.45);
+    --scrim: rgba(8,11,20,0.6);
+  }
+  :root[data-theme="light"]{
+    --bg:#F2F4FA;
+    --bg-2:#E9EDF6;
+    --panel:#FFFFFF;
+    --panel-2:#F5F7FC;
+    --ink:#141A2A;
+    --ink-dim:#5B6478;
+    --accent:#0BA88C;
+    --accent-ink:#EAFBF7;
+    --accent-2:#C9790F;
+    --accent-2-ink:#FFF6E8;
+    --accent-3:#6A5AE0;
+    --border:rgba(20,26,42,0.09);
+    --border-strong:rgba(20,26,42,0.16);
+    --glow-a:rgba(11,168,140,0.25);
+    --glow-b:rgba(201,121,15,0.22);
+    --shadow: 0 20px 50px rgba(20,26,42,0.12);
+    --scrim: rgba(242,244,250,0.7);
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1100px 600px at 85% -10%, var(--glow-a) 0%, transparent 60%),
+      radial-gradient(900px 500px at -10% 20%, var(--glow-b) 0%, transparent 55%),
+      var(--bg);
+    color:var(--ink);
+    font-family:'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    transition:background-color .4s ease, color .4s ease;
+    overflow-x:hidden;
+  }
+  h1,h2,h3{ font-family:'Space Grotesk', sans-serif; margin:0; }
+  .mono{ font-family:'IBM Plex Mono', monospace; }
+  a{ color:inherit; text-decoration:none; }
+  button{ font-family:inherit; cursor:pointer; }
+
+  ::selection{ background:var(--accent); color:var(--accent-ink); }
+
+  /* ---------- floating binary ambience ---------- */
+  .bit{
+    position:fixed; z-index:0; pointer-events:none;
+    font-family:'IBM Plex Mono', monospace;
+    color:var(--ink-dim);
+    opacity:.14;
+    font-size:14px;
+    animation:drift linear infinite;
+  }
+  @keyframes drift{
+    from{ transform:translateY(0); }
+    to{ transform:translateY(-120vh); }
+  }
+
+  /* ---------- topbar ---------- */
+  .topbar{
+    position:sticky; top:0; z-index:20;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:20px clamp(20px,5vw,64px);
+    backdrop-filter:blur(14px);
+    background:linear-gradient(to bottom, var(--scrim), transparent);
+  }
+  .brand{
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:700; font-size:20px; letter-spacing:.02em;
+    display:flex; align-items:center; gap:10px;
+  }
+  .brand .mark{
+    width:30px; height:30px; border-radius:8px;
+    background:linear-gradient(135deg, var(--accent), var(--accent-3));
+    display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:2px; padding:5px;
+  }
+  .brand .mark i{ background:var(--bg); border-radius:1px; }
+  .brand .mark i:nth-child(2){ background:transparent; }
+  .brand span{ color:var(--ink-dim); font-weight:500; }
+
+  .theme-toggle{
+    position:relative;
+    width:52px; height:30px; border-radius:999px;
+    border:1px solid var(--border-strong);
+    background:var(--panel);
+    display:flex; align-items:center;
+    padding:3px;
+  }
+  .theme-toggle .knob{
+    width:22px; height:22px; border-radius:50%;
+    background:linear-gradient(135deg, var(--accent), var(--accent-3));
+    display:grid; place-items:center; color:var(--accent-ink);
+    transition:transform .35s cubic-bezier(.65,0,.35,1);
+  }
+  :root[data-theme="light"] .theme-toggle .knob{ transform:translateX(22px); }
+  .theme-toggle svg{ width:13px; height:13px; }
+
+  /* ---------- hero ---------- */
+  .hero{
+    position:relative; z-index:1;
+    max-width:1180px; margin:0 auto;
+    padding:clamp(24px,6vw,60px) clamp(20px,5vw,64px) 20px;
+    display:grid; grid-template-columns:1.15fr 0.85fr; gap:48px;
+    align-items:center;
+  }
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--accent);
+    display:flex; align-items:center; gap:10px;
+    margin-bottom:18px;
+    opacity:0; animation:riseIn .7s ease forwards; animation-delay:.05s;
+  }
+  .eyebrow::before{
+    content:""; width:22px; height:1px; background:var(--accent);
+  }
+  .hero h1{
+    font-size:clamp(34px, 5.2vw, 58px);
+    line-height:1.06; font-weight:700; letter-spacing:-.01em;
+    opacity:0; animation:riseIn .7s ease forwards; animation-delay:.15s;
+  }
+  .hero h1 em{
+    font-style:normal;
+    background:linear-gradient(100deg, var(--accent), var(--accent-3));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .hero-sub{
+    margin-top:18px; max-width:520px;
+    color:var(--ink-dim); font-size:16.5px; line-height:1.65;
+    opacity:0; animation:riseIn .7s ease forwards; animation-delay:.25s;
+  }
+  .motivational-wrap{
+    margin-top:28px; min-height:52px;
+    opacity:0; animation:riseIn .7s ease forwards; animation-delay:.35s;
+  }
+  .motivational{
+    display:flex; gap:12px; align-items:flex-start;
+    padding:14px 16px; border-radius:14px;
+    background:var(--panel); border:1px solid var(--border);
+    max-width:520px;
+  }
+  .motivational .spark{
+    flex:none; width:20px; height:20px; margin-top:2px; color:var(--accent-2);
+  }
+  #quoteText{ font-size:14.5px; color:var(--ink); line-height:1.55; }
+  #quoteText b{ color:var(--accent); font-weight:600; }
+
+  @keyframes riseIn{
+    from{ opacity:0; transform:translateY(14px); }
+    to{ opacity:1; transform:translateY(0); }
+  }
+
+  /* ---------- signature K-map grid ---------- */
+  .kmap-wrap{
+    display:flex; justify-content:center;
+    opacity:0; animation:riseIn .8s ease forwards; animation-delay:.2s;
+  }
+  .kmap-frame{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:20px;
+    padding:20px;
+    box-shadow:var(--shadow);
+    position:relative;
+  }
+  .kmap-frame::before{
+    content:"AB \\ CD";
+    position:absolute; top:-11px; left:20px;
+    font-family:'IBM Plex Mono', monospace; font-size:10.5px;
+    background:var(--panel); padding:0 6px; color:var(--ink-dim); letter-spacing:.05em;
+  }
+  .kmap-grid{
+    display:grid;
+    grid-template-columns:32px repeat(4, 44px);
+    grid-template-rows:24px repeat(4, 44px);
+    gap:5px;
+  }
+  .klabel{
+    display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--ink-dim);
+  }
+  .kcell{
+    border-radius:7px;
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    animation:pulseCell 4.8s ease-in-out infinite;
+  }
+  @keyframes pulseCell{
+    0%, 92%, 100%{ background:var(--panel-2); box-shadow:none; border-color:var(--border); }
+    4%, 10%{ background:var(--accent); box-shadow:0 0 16px var(--glow-a); border-color:var(--accent); }
+  }
+  .kmap-caption{
+    margin-top:14px; text-align:center;
+    font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--ink-dim);
+    letter-spacing:.06em;
+  }
+
+  /* ---------- modules ---------- */
+  .modules{
+    position:relative; z-index:1;
+    max-width:1180px; margin:20px auto 0;
+    padding:36px clamp(20px,5vw,64px) 10px;
+    display:grid; grid-template-columns:1fr 1fr; gap:26px;
+  }
+  .module-card{
+    position:relative;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:22px;
+    padding:30px 28px 26px;
+    overflow:hidden;
+    cursor:pointer;
+    transition:transform .35s cubic-bezier(.2,.8,.2,1), border-color .35s ease, box-shadow .35s ease;
+    opacity:0; animation:riseIn .7s ease forwards;
+  }
+  .module-card:nth-child(1){ animation-delay:.45s; }
+  .module-card:nth-child(2){ animation-delay:.55s; }
+  .module-card:hover{
+    transform:translateY(-6px);
+    border-color:var(--border-strong);
+    box-shadow:var(--shadow);
+  }
+  .module-card::after{
+    content:""; position:absolute; inset:auto -40% -60% auto; width:220px; height:220px;
+    border-radius:50%; filter:blur(10px); opacity:.22; pointer-events:none;
+  }
+  .module-card.learn::after{ background:var(--accent); }
+  .module-card.assess::after{ background:var(--accent-2); }
+
+  .card-top{ display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:22px; }
+  .card-tag{
+    font-family:'IBM Plex Mono', monospace; font-size:11.5px; letter-spacing:.1em;
+    padding:6px 10px; border-radius:999px; border:1px solid var(--border-strong);
+    color:var(--ink-dim);
+  }
+  .card-icon{
+    width:42px; height:42px; border-radius:12px; display:grid; place-items:center;
+    color:var(--accent-ink);
+  }
+  .module-card.learn .card-icon{ background:linear-gradient(135deg, var(--accent), #57f0d6); }
+  .module-card.assess .card-icon{ background:linear-gradient(135deg, var(--accent-2), #ffc46b); color:var(--accent-2-ink); }
+  .card-icon svg{ width:22px; height:22px; }
+
+  .module-card h2{ font-size:24px; margin-bottom:10px; }
+  .module-card p.desc{ color:var(--ink-dim); font-size:14.5px; line-height:1.6; margin-bottom:22px; }
+
+  .cta-row{
+    display:flex; align-items:center; gap:8px;
+    font-weight:600; font-size:14.5px;
+  }
+  .module-card.learn .cta-row{ color:var(--accent); }
+  .module-card.assess .cta-row{ color:var(--accent-2); }
+  .cta-row svg{ width:16px; height:16px; transition:transform .3s ease; }
+  .module-card:hover .cta-row svg{ transform:translateX(5px); }
+
+  /* assessment login mini-form */
+  .assess-panel{
+    margin-top:6px; padding-top:18px; border-top:1px dashed var(--border-strong);
+  }
+  .assess-form{ display:flex; gap:8px; flex-wrap:wrap; }
+  .assess-form input{
+    flex:1 1 150px; min-width:0;
+    background:var(--panel-2); border:1px solid var(--border-strong);
+    color:var(--ink); border-radius:10px; padding:10px 12px; font-size:14px;
+    font-family:'Inter', sans-serif;
+  }
+  .assess-form input:focus{ outline:2px solid var(--accent-2); outline-offset:1px; }
+  .assess-form button{
+    flex:none;
+    background:var(--accent-2); color:var(--accent-2-ink); border:none;
+    border-radius:10px; padding:10px 16px; font-weight:600; font-size:13.5px;
+    transition:filter .2s ease;
+  }
+  .assess-form button:hover{ filter:brightness(1.08); }
+  .assess-hint{ margin-top:8px; font-size:12px; color:var(--ink-dim); }
+
+  .welcome-box{
+    display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+  }
+  .welcome-msg{ font-size:14.5px; }
+  .welcome-msg b{ color:var(--accent-2); }
+  .switch-user{ font-size:12px; color:var(--ink-dim); border-bottom:1px dashed var(--ink-dim); }
+  .switch-user:hover{ color:var(--ink); }
+
+  /* ---------- footer ---------- */
+  footer{
+    position:relative; z-index:1;
+    max-width:1180px; margin:50px auto 0; padding:24px clamp(20px,5vw,64px) 40px;
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;
+    border-top:1px solid var(--border);
+    color:var(--ink-dim); font-size:13px;
+  }
+
+  /* ---------- responsive ---------- */
+  @media (max-width:860px){
+    .hero{ grid-template-columns:1fr; }
+    .kmap-wrap{ order:-1; transform:scale(.92); }
+    .modules{ grid-template-columns:1fr; }
+  }
+  @media (max-width:480px){
+    .kmap-grid{
+      grid-template-columns:26px repeat(4, 1fr);
+      grid-template-rows:20px repeat(4, 38px);
+    }
+    .brand span{ display:none; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration:0.01ms !important; animation-iteration-count:1 !important; transition-duration:0.01ms !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="mark"><i></i><i></i><i></i><i></i></span>
+    K-MAP<span>&nbsp;LAB</span>
+  </div>
+  <button class="theme-toggle" id="themeToggle" aria-label="Toggle light and dark mode">
+    <span class="knob">
+      <svg id="knobIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    </span>
+  </button>
+</header>
+
+<main>
+  <section class="hero">
+    <div>
+      <p class="eyebrow">Boolean minimization, visualized</p>
+      <h1>Group the ones.<br>Find the <em>simplest</em> truth.</h1>
+      <p class="hero-sub">A two-part lab for Karnaugh maps: work through guided grouping in the solver, then prove what you know in a timed assessment.</p>
+      <div class="motivational-wrap">
+        <div class="motivational">
+          <svg class="spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg>
+          <p id="quoteText" class="mono">Loading…</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="kmap-wrap">
+      <div class="kmap-frame">
+        <div class="kmap-grid" id="kmapGrid"></div>
+        <p class="kmap-caption">4-VARIABLE K-MAP · GRAY-CODE SWEEP</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="modules">
+    <!-- LEARNING -->
+    <article class="module-card learn" id="learnCard">
+      <div class="card-top">
+        <span class="card-tag mono">MODULE — LEARN</span>
+        <span class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>
+        </span>
+      </div>
+      <h2>K-Map Learning</h2>
+      <p class="desc">Build and simplify 2, 3, and 4-variable Karnaugh maps interactively — see groupings, prime implicants, and the reduced expression as you go.</p>
+      <span class="cta-row">Open the solver
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </span>
+    </article>
+
+    <!-- ASSESSMENT -->
+    <article class="module-card assess" id="assessCard">
+      <div class="card-top">
+        <span class="card-tag mono">MODULE — ASSESS</span>
+        <span class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        </span>
+      </div>
+      <h2>K-Map Assessment</h2>
+      <p class="desc">Put your minimization skills to the test under timed, scored conditions — sign in to track your results.</p>
+      <span class="cta-row" id="assessCtaRow">Sign in to begin
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </span>
+
+      <div class="assess-panel" id="assessPanel">
+        <!-- filled by JS: login form OR welcome box -->
+      </div>
+    </article>
+  </section>
+
+  <footer>
+    <span>K-Map Lab · Boolean minimization, practiced properly.</span>
+    <span class="mono" id="clockBits">01001011</span>
+  </footer>
+</main>
+
+<script>
+(function(){
+  /* ---------------- THEME ---------------- */
+  const root = document.documentElement;
+  const toggle = document.getElementById('themeToggle');
+  const knobIcon = document.getElementById('knobIcon');
+  const sunPath = '<circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>';
+  const moonPath = '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/>';
+
+  function applyTheme(t){
+    root.setAttribute('data-theme', t);
+    knobIcon.innerHTML = t === 'dark' ? moonPath : sunPath;
+    localStorage.setItem('kmapTheme', t);
+  }
+  const saved = localStorage.getItem('kmapTheme') ||
+    (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  applyTheme(saved);
+
+  toggle.addEventListener('click', () => {
+    applyTheme(root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+  });
+
+  /* ---------------- FLOATING BITS ---------------- */
+  const bitCount = window.innerWidth < 600 ? 8 : 16;
+  for(let i=0;i<bitCount;i++){
+    const b = document.createElement('span');
+    b.className = 'bit';
+    b.textContent = Math.round(Math.random());
+    b.style.left = Math.random()*100 + 'vw';
+    b.style.top = (100 + Math.random()*20) + 'vh';
+    b.style.animationDuration = (14 + Math.random()*14) + 's';
+    b.style.animationDelay = (Math.random()*10) + 's';
+    document.body.appendChild(b);
+  }
+
+  /* ---------------- K-MAP GRID (gray-code boustrophedon glow) ---------------- */
+  const grid = document.getElementById('kmapGrid');
+  const gray = ['00','01','11','10'];
+  grid.appendChild(document.createElement('div')); // corner spacer
+  gray.forEach(c => {
+    const el = document.createElement('div');
+    el.className = 'klabel mono';
+    el.textContent = c;
+    grid.appendChild(el);
+  });
+
+  let order = 0;
+  const total = 16;
+  for(let r=0;r<4;r++){
+    const rowLabel = document.createElement('div');
+    rowLabel.className = 'klabel mono';
+    rowLabel.textContent = gray[r];
+    grid.appendChild(rowLabel);
+
+    const cols = (r % 2 === 0) ? [0,1,2,3] : [3,2,1,0];
+    // We must still render cells left-to-right in DOM (grid order),
+    // but stagger the *delay* using the boustrophedon path so the glow
+    // travels like a true single-bit-change sweep across the map.
+    const delays = new Array(4);
+    cols.forEach((colIdx, i) => { delays[colIdx] = order + i; });
+    for(let c=0;c<4;c++){
+      const cell = document.createElement('div');
+      cell.className = 'kcell';
+      const stepDelay = (delays[c] / total) * 4.8;
+      cell.style.animationDelay = stepDelay.toFixed(2) + 's';
+      grid.appendChild(cell);
+    }
+    order += 4;
+  }
+
+  /* ---------------- MOTIVATIONAL MESSAGES ---------------- */
+  const quotes = [
+    'Every messy truth table hides a simple expression. Keep grouping.',
+    'Sixteen cells, one elegant answer — it is in there.',
+    'Minimization is patience wearing a grid.',
+    'A don\u2019t-care is permission to simplify boldly.',
+    'The shortest sum-of-products is out there. Go circle it.',
+    'Practice today\u2019s map, and tomorrow\u2019s circuit gets smaller.'
+  ];
+  const quoteEl = document.getElementById('quoteText');
+  let qi = 0;
+  function showQuote(){
+    quoteEl.style.opacity = 0;
+    setTimeout(() => {
+      quoteEl.textContent = quotes[qi % quotes.length];
+      quoteEl.style.transition = 'opacity .5s ease';
+      quoteEl.style.opacity = 1;
+      qi++;
+    }, 260);
+  }
+  showQuote();
+  setInterval(showQuote, 5000);
+
+  /* ---------------- NAVIGATION TARGETS ---------------- */
+  const LEARN_URL = 'K-Map-Solver-main/index.html';
+  const ASSESS_URL = 'K-Map%20Assessment/index.html';
+
+  document.getElementById('learnCard').addEventListener('click', () => {
+    window.location.href = LEARN_URL;
+  });
+
+  /* ---------------- ASSESSMENT LOGIN PANEL ---------------- */
+  const panel = document.getElementById('assessPanel');
+  const ctaRow = document.getElementById('assessCtaRow');
+
+  function renderWelcome(name){
+    ctaRow.childNodes[0].textContent = 'Continue to assessment ';
+    panel.innerHTML = `
+      <div class="welcome-box">
+        <p class="welcome-msg">Welcome back, <b>${name}</b> — ready when you are.</p>
+        <a href="#" class="switch-user mono" id="switchUser">Not you? Switch user</a>
+      </div>`;
+    document.getElementById('switchUser').addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      localStorage.removeItem('kmapUser');
+      renderForm();
+    });
+  }
+
+  function renderForm(){
+    ctaRow.childNodes[0].textContent = 'Sign in to begin ';
+    panel.innerHTML = `
+      <form class="assess-form" id="assessForm">
+        <input type="text" id="studentName" placeholder="Your name" autocomplete="name" required />
+        <button type="submit">Continue</button>
+      </form>
+      <p class="assess-hint">Your name identifies your assessment attempt — no password needed here.</p>`;
+    const form = document.getElementById('assessForm');
+    const input = document.getElementById('studentName');
+    form.addEventListener('click', e => e.stopPropagation());
+    input.addEventListener('click', e => e.stopPropagation());
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const name = input.value.trim();
+      if(!name) return;
+      localStorage.setItem('kmapUser', name);
+      renderWelcome(name);
+    });
+  }
+
+  const existingUser = localStorage.getItem('kmapUser');
+  if(existingUser){ renderWelcome(existingUser); } else { renderForm(); }
+
+  document.getElementById('assessCard').addEventListener('click', (e) => {
+    if(e.target.closest('.assess-form') || e.target.closest('.switch-user')) return;
+    const user = localStorage.getItem('kmapUser');
+    if(user){
+      window.location.href = ASSESS_URL + '?user=' + encodeURIComponent(user);
+    } else {
+      const input = document.getElementById('studentName');
+      if(input) input.focus();
+    }
+  });
+
+  /* ---------------- FOOTER BIT TICKER ---------------- */
+  const clockBits = document.getElementById('clockBits');
+  setInterval(() => {
+    let s = '';
+    for(let i=0;i<8;i++) s += Math.round(Math.random());
+    clockBits.textContent = s;
+  }, 1400);
+})();
+</script>
+
+</body>
+</html>
