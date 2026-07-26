@@ -1,6 +1,12 @@
-<!doctype html><html lang="en" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#3e7c7c"><title>Admin Dashboard</title><link rel="stylesheet" href="style.css"></head><body><button class="themeToggle" onclick="toggleTheme()" style="position:fixed;right:12px;bottom:12px;z-index:99">🌙 Dark</button>
-<header><h1>🧩 K-Map Assessment — Admin</h1><button onclick="logout()" style="width:auto">Logout</button></header><div class="wrap">
-<div class="card"><h2>Assessment Results Dashboard</h2><div id="stats" class="row"></div><div id="analysis"></div><button onclick="dashboard()">Refresh Dashboard</button></div>
+<!doctype html><html lang="en" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#3e7c7c"><title>Admin Dashboard</title><link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+</head><body><button class="themeToggle" onclick="toggleTheme()" style="position:fixed;right:12px;bottom:12px;z-index:99">🌙 Dark</button>
+<header><h1>🧩 K-Map Assessment — Admin</h1><div class="headerActions"><button onclick="logout()" style="width:auto">Logout</button></div></header><div class="wrap">
+<div class="card"><h2>Assessment Results Dashboard</h2><div id="stats" class="row"></div><div id="analysis"></div><button onclick="dashboard()" class="secondary">Refresh Dashboard</button></div>
+
+<div class="card"><h2>📄 Section-wise Marks Report</h2><p class="sub">Generates one PDF with a table per section: each student's problems solved, marks obtained, and marks assigned.</p><button id="reportBtn" onclick="openReport()">Preview & Download PDF Report</button><div id="reportMsg"></div></div>
+
 <div class="card"><h2>Create Assessment Problem</h2>
 <div class="row"><input id="title" placeholder="Problem title"><select id="vars"><option>2</option><option selected>3</option><option>4</option><option>5</option></select></div>
 <div class="row"><select id="form"><option>SOP</option><option>POS</option></select><select id="method"><option value="normal">Normal</option><option value="dc">Don't Care</option></select></div>
@@ -9,14 +15,104 @@
 <div class="row"><label>Assessment Start<input id="startTime" type="datetime-local"></label><label>Assessment End<input id="endTime" type="datetime-local"></label></div>
 <div class="row"><input id="maxAttempts" type="number" min="1" value="1" placeholder="Maximum Attempts"><input id="duration" type="number" min="0" value="0" placeholder="Duration in minutes (0=no timer)"></div>
 <textarea id="note" placeholder="Question instruction"></textarea><button id="save">Save Problem</button><div id="msg"></div></div>
-<div class="card"><h2>Problems</h2><button onclick="loadP()">Refresh</button><div id="plist"></div></div>
-<div class="card"><h2>Detailed Student Responses</h2><button onclick="loadR()">Refresh</button><div id="rlist" style="overflow:auto"></div></div></div>
+<div class="card"><h2>Problems</h2><button onclick="loadP()" class="secondary">Refresh</button><div id="plist"></div></div>
+<div class="card"><h2>Detailed Student Responses</h2><button onclick="loadR()" class="secondary">Refresh</button><div id="rlist" style="overflow:auto"></div></div></div>
+
+<div id="reportOverlay" class="modalOverlay hidden">
+  <div class="modalBox">
+    <h3>Section-wise Marks Report</h3>
+    <p class="sub" id="reportGeneratedAt"></p>
+    <div id="reportBody"></div>
+    <div class="modalActions">
+      <button id="downloadPdfBtn" onclick="downloadReportPdf()">⬇ Download PDF</button>
+      <button class="secondary" onclick="closeReport()">Close</button>
+    </div>
+  </div>
+</div>
+
 <script src="api.js"></script><script>
-if(typeof window.toggleTheme!=="function"){(function(){const saved=localStorage.getItem("kmapTheme");if(saved)document.documentElement.setAttribute("data-theme",saved);function paint(){const t=(document.documentElement.getAttribute("data-theme")||"light")==="dark";document.querySelectorAll(".themeToggle").forEach(b=>b.textContent=t?"☀️ Light":"🌙 Dark")}window.toggleTheme=function(){const cur=document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark";document.documentElement.setAttribute("data-theme",cur);localStorage.setItem("kmapTheme",cur);paint()};paint()})()}
 const me=requireRole("admin");
-save.onclick=async()=>{try{let j=await api("addProblem",{token:me.token,problem:{title:title.value,variables:+vars.value,form:form.value,method:method.value,terms:terms.value,dontCares:dc.value,marks:+marks.value,active:active.value,note:note.value,startTime:startTime.value,endTime:endTime.value,maxAttempts:+maxAttempts.value,durationMinutes:+duration.value}});msg.className="msg ok";msg.textContent="Saved "+j.problemId;loadP();dashboard()}catch(e){msg.className="msg bad";msg.textContent=e.message}};
+let lastReport=null;
+
+save.onclick=async()=>{save.classList.add("loading");save.disabled=true;try{let j=await api("addProblem",{token:me.token,problem:{title:title.value,variables:+vars.value,form:form.value,method:method.value,terms:terms.value,dontCares:dc.value,marks:+marks.value,active:active.value,note:note.value,startTime:startTime.value,endTime:endTime.value,maxAttempts:+maxAttempts.value,durationMinutes:+duration.value}});msg.className="msg ok";msg.textContent="Saved "+j.problemId;loadP();dashboard()}catch(e){msg.className="msg bad";msg.textContent=e.message}finally{save.classList.remove("loading");save.disabled=false}};
+
 async function dashboard(){try{let j=await api("getDashboard",{token:me.token}),s=j.summary;stats.innerHTML=`<div class="msg"><b>${s.students}</b><br>Students</div><div class="msg"><b>${s.submissions}</b><br>Submissions</div><div class="msg"><b>${s.average}</b><br>Average Score</div><div class="msg"><b>${s.correctRate}%</b><br>Fully Correct</div>`;analysis.innerHTML="<h3>Problem-wise Analysis</h3><table><tr><th>Problem</th><th>Attempts</th><th>Average</th><th>Fully Correct</th></tr>"+j.byProblem.map(x=>`<tr><td>${x.problemId} — ${x.title}</td><td>${x.attempts}</td><td>${x.average}</td><td>${x.correct}</td></tr>`).join("")+"</table>"}catch(e){analysis.textContent=e.message}}
+
 async function loadP(){try{let j=await api("listProblems",{token:me.token,admin:true});plist.innerHTML="<table><tr><th>ID</th><th>Title</th><th>Type</th><th>Marks</th><th>Attempts</th><th>Duration</th><th>Start</th><th>End</th></tr>"+j.problems.map(x=>`<tr><td>${x.problemId}</td><td>${x.title}</td><td>${x.variables}V ${x.form}</td><td>${x.marks}</td><td>${x.maxAttempts}</td><td>${x.durationMinutes} min</td><td>${x.startTime||"-"}</td><td>${x.endTime||"-"}</td></tr>`).join("")+"</table>"}catch(e){plist.textContent=e.message}}
+
 async function loadR(){try{let j=await api("listResponses",{token:me.token});rlist.innerHTML="<table><tr><th>Student</th><th>Problem</th><th>Attempt</th><th>Expression</th><th>Equivalent</th><th>Coverage</th><th>Minimum</th><th>Score</th></tr>"+j.responses.map(x=>`<tr><td>${x.registerNo} ${x.studentName}</td><td>${x.problemId}</td><td>${x.attemptNo}</td><td>${x.finalAnswer}</td><td>${x.equivalent}</td><td>${x.complete}</td><td>${x.minimum}</td><td>${x.score}/${x.maxMarks}</td></tr>`).join("")+"</table>"}catch(e){rlist.textContent=e.message}}
+
+async function openReport(){
+  reportBtn.classList.add("loading");reportBtn.disabled=true;reportMsg.innerHTML="";
+  try{
+    let j=await api("getSectionReport",{token:me.token});
+    lastReport=j;
+    reportGeneratedAt.textContent="Generated "+new Date(j.generatedAt).toLocaleString();
+    if(!j.sections.length){
+      reportBody.innerHTML=`<div class="msg">No students found. Add students to the Students sheet first.</div>`;
+    }else{
+      reportBody.innerHTML=j.sections.map(sec=>`
+        <div class="reportSection">
+          <h4>Section ${sec.section} <span class="badge">${sec.totals.studentCount} students</span></h4>
+          <table>
+            <tr><th>Reg. No</th><th>Name</th><th>Solved</th><th>Obtained</th><th>Assigned</th></tr>
+            ${sec.students.map(s=>`<tr><td>${s.registerNo}</td><td style="font-family:var(--font-body)">${s.name}</td><td>${s.problemsSolved}</td><td>${s.obtained}</td><td>${s.assigned}</td></tr>`).join("")}
+            <tr><td colspan="2"><b>Section Total</b></td><td><b>${sec.totals.solved}</b></td><td><b>${sec.totals.obtained}</b></td><td><b>${sec.totals.assigned}</b></td></tr>
+          </table>
+        </div>`).join("");
+    }
+    reportOverlay.classList.remove("hidden");
+  }catch(e){
+    reportMsg.className="msg bad";reportMsg.textContent=e.message;
+  }finally{
+    reportBtn.classList.remove("loading");reportBtn.disabled=false;
+  }
+}
+function closeReport(){reportOverlay.classList.add("hidden")}
+
+function downloadReportPdf(){
+  if(!lastReport||!lastReport.sections.length) return;
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({unit:"pt",format:"a4"});
+  const pageW=doc.internal.pageSize.getWidth();
+  const margin=40;
+  let y=48;
+
+  doc.setFont("helvetica","bold");doc.setFontSize(16);
+  doc.text("K-Map Assessment — Section-wise Marks Report",margin,y);
+  y+=18;
+  doc.setFont("helvetica","normal");doc.setFontSize(10);doc.setTextColor(90);
+  doc.text("Generated "+new Date(lastReport.generatedAt).toLocaleString(),margin,y);
+  doc.setTextColor(0);
+  y+=16;
+
+  lastReport.sections.forEach((sec,idx)=>{
+    if(idx>0) y+=8;
+    if(y>720){doc.addPage();y=48}
+    doc.setFont("helvetica","bold");doc.setFontSize(12.5);
+    doc.text(`Section ${sec.section}  (${sec.totals.studentCount} students)`,margin,y);
+    y+=10;
+
+    const body=sec.students.map(s=>[s.registerNo,s.name,String(s.problemsSolved),String(s.obtained),String(s.assigned)]);
+    body.push(["","Section Total",String(sec.totals.solved),String(sec.totals.obtained),String(sec.totals.assigned)]);
+
+    doc.autoTable({
+      startY:y+6,
+      margin:{left:margin,right:margin},
+      head:[["Register No","Name","Problems Solved","Marks Obtained","Marks Assigned"]],
+      body,
+      styles:{font:"helvetica",fontSize:9.5,cellPadding:5},
+      headStyles:{fillColor:[14,124,134],textColor:255,fontStyle:"bold"},
+      footStyles:{fillColor:[231,244,243]},
+      didParseCell:(data)=>{
+        if(data.row.index===body.length-1){data.cell.styles.fontStyle="bold";data.cell.styles.fillColor=[231,244,243]}
+      }
+    });
+    y=doc.lastAutoTable.finalY+18;
+  });
+
+  doc.save("kmap-section-report-"+new Date().toISOString().slice(0,10)+".pdf");
+}
+
 dashboard();loadP();loadR();
 </script><footer class="site-footer">© 2026 Developed and Maintained by S. Alwyn Rajiv, AP/ECE</footer></body></html>
