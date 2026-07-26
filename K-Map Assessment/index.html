@@ -1,3 +1,113 @@
-<!doctype html><html lang="en" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#3e7c7c"><link rel="stylesheet" href="style.css"><title>K-Map Assessment</title></head><body><button class="themeToggle" onclick="toggleTheme()" style="position:fixed;right:12px;bottom:12px;z-index:99">🌙 Dark</button><header><h1>🧩 K-Map Assessment Platform</h1><p>Admin & Student Login</p></header><div class="wrap"><div class="card" style="max-width:480px;margin:50px auto"><h2>Login</h2><select id="role"><option value="student">Student</option><option value="admin">Admin</option></select><input id="user" placeholder="Register Number / Admin Username"><input id="pass" type="password" placeholder="Password"><button id="login">Login</button><div id="msg"></div></div></div><script src="api.js"></script><script>
-if(typeof window.toggleTheme!=="function"){(function(){const saved=localStorage.getItem("kmapTheme");if(saved)document.documentElement.setAttribute("data-theme",saved);function paint(){const t=(document.documentElement.getAttribute("data-theme")||"light")==="dark";document.querySelectorAll(".themeToggle").forEach(b=>b.textContent=t?"☀️ Light":"🌙 Dark")}window.toggleTheme=function(){const cur=document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark";document.documentElement.setAttribute("data-theme",cur);localStorage.setItem("kmapTheme",cur);paint()};paint()})()}
-login.onclick=async()=>{try{msg.className="msg";msg.textContent="Checking...";let j=await api("login",{role:role.value,username:user.value.trim(),password:pass.value});localStorage.setItem("kmapSession",JSON.stringify(j.user));location.href=j.user.role==="admin"?"admin.html":"student.html"}catch(e){msg.className="msg bad";msg.textContent=e.message}}</script><footer class="site-footer">© 2026 Developed and Maintained by S. Alwyn Rajiv, AP/ECE</footer></body></html>
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#3e7c7c">
+<title>K-Map Assessment — Login</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<button class="themeToggle" onclick="toggleTheme()" style="position:fixed;right:14px;top:14px;z-index:99">🌙 Dark</button>
+
+<div class="authShell">
+  <div class="authGrid">
+    <div class="authBrand">
+      <div>
+        <h1>🧩 K-Map Assessment</h1>
+        <p>Interactive Karnaugh-Map practice and evaluation. Place terms, build groups, and submit a minimal Boolean expression — graded automatically.</p>
+        <div class="authDiagram" id="brandDiagram"></div>
+      </div>
+      <div class="authFoot">Digital Logic Design · Assessment Portal</div>
+    </div>
+
+    <div class="authForm">
+      <h2 id="formTitle">Student Login</h2>
+      <p class="sub" id="formSub">Sign in with your register number to attempt assessments.</p>
+
+      <div class="tabs">
+        <button type="button" id="tabStudent" class="active" onclick="setRole('student')">🎓 Student</button>
+        <button type="button" id="tabAdmin" onclick="setRole('admin')">🛠 Admin</button>
+      </div>
+
+      <form id="loginForm" novalidate>
+        <label id="userLabel" for="username">Register Number</label>
+        <input id="username" autocomplete="username" placeholder="e.g. 21XX000" required>
+        <div class="field-error" id="userErr"></div>
+
+        <label for="password">Password</label>
+        <input id="password" type="password" autocomplete="current-password" placeholder="Enter your password" required>
+        <div class="field-error" id="passErr"></div>
+
+        <button id="submitBtn" type="submit">Sign In</button>
+      </form>
+      <div id="loginMsg"></div>
+    </div>
+  </div>
+</div>
+
+<script src="api.js"></script>
+<script>
+// paint a little animated "signal" strip in the brand panel — purely decorative
+(function(){
+  const d=document.getElementById('brandDiagram');
+  for(let i=0;i<8;i++){const s=document.createElement('span');d.appendChild(s)}
+  function pulse(){
+    const spans=[...d.children];
+    spans.forEach(s=>s.classList.remove('on'));
+    const n=1+Math.floor(Math.random()*3);
+    for(let i=0;i<n;i++) spans[Math.floor(Math.random()*spans.length)].classList.add('on');
+  }
+  pulse(); setInterval(pulse,1400);
+})();
+
+// If already logged in, skip straight to the right dashboard.
+(function(){
+  const s=session();
+  if(s&&s.role==='admin') location.href='admin.html';
+  else if(s&&s.role==='student') location.href='student.html';
+})();
+
+let role='student';
+function setRole(r){
+  role=r;
+  tabStudent.classList.toggle('active',r==='student');
+  tabAdmin.classList.toggle('active',r==='admin');
+  formTitle.textContent = r==='student' ? 'Student Login' : 'Admin Login';
+  formSub.textContent = r==='student' ? 'Sign in with your register number to attempt assessments.' : 'Sign in with your administrator credentials.';
+  userLabel.textContent = r==='student' ? 'Register Number' : 'Admin Username';
+  username.placeholder = r==='student' ? 'e.g. 21XX000' : 'Admin username';
+  loginMsg.innerHTML='';
+  userErr.textContent='';passErr.textContent='';
+}
+
+loginForm.addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  userErr.textContent='';passErr.textContent='';loginMsg.innerHTML='';
+
+  const u=username.value.trim(), p=password.value;
+  let hasErr=false;
+  if(!u){ userErr.textContent = role==='student' ? 'Enter your register number.' : 'Enter your admin username.'; hasErr=true; }
+  if(!p){ passErr.textContent = 'Enter your password.'; hasErr=true; }
+  if(hasErr) return;
+
+  submitBtn.classList.add('loading');
+  submitBtn.disabled=true;
+  try{
+    const j = await api('login',{role, username:u, password:p});
+    saveSession(j.user);
+    loginMsg.className='msg ok';
+    loginMsg.textContent='Signed in. Redirecting…';
+    location.href = j.user.role==='admin' ? 'admin.html' : 'student.html';
+  }catch(err){
+    loginMsg.className='msg bad';
+    loginMsg.textContent = err.message || 'Login failed. Please try again.';
+  }finally{
+    submitBtn.classList.remove('loading');
+    submitBtn.disabled=false;
+  }
+});
+</script>
+<footer class="site-footer">© 2026 Developed and Maintained by S. Alwyn Rajiv, AP/ECE</footer>
+</body>
+</html>
