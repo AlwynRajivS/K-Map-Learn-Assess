@@ -5,7 +5,7 @@
    version) — editing the script alone does NOT update the live
    /exec URL. Also confirm: Execute as "Me", Who has access "Anyone".
    ============================================================ */
-const API_URL="https://script.google.com/macros/s/AKfycbwP-_utMvMmmB_C21YECA_pV0Fm764hR5psX79VQaK1duV6OHIibNASpSjGVaoPp3E6/exec";
+const API_URL="https://script.google.com/macros/s/AKfycbzerVnM14VoNGKtGqRKvXjj8_Ldu74LxDrRvyR_qdx2TC5RibyG8ZUr2hCZyeQiPTyM/exec";
 
 async function api(action,payload={}){
   if(!API_URL||API_URL.includes("PASTE_YOUR")) throw Error("Set API_URL in api.js");
