@@ -1,15 +1,24 @@
 <!doctype html><html lang="en" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#3e7c7c"><title>K-Map Assessment</title><link rel="stylesheet" href="style.css"></head><body>
-<header><h1>🧩 K-Map Student Assessment</h1><div class="headerActions"><button class="themeToggle" onclick="toggleTheme()" style="width:auto">🌙 Dark</button><button onclick="logout()" style="width:auto">Logout</button></div></header>
-<div class="wrap"><div class="card"><h3 id="welcome"></h3><p class="sub">Select an assessment problem. Marks and availability are shown below.</p><select id="problem"></select><div id="selectedProblemInfo" class="msg"></div><button id="load">Start / Resume Problem</button><div id="topMsg"></div></div>
-<div class="card"><h2>📊 My Previous Assessment Marks</h2><div id="studentSummary" class="row"></div><div id="history" style="overflow:auto"></div></div>
-<div id="assessment" class="card hidden"><div class="questionHero"><h2 id="qtitle"></h2><div id="chips" class="chips"></div><p id="qnote"></p></div>
+<header><h1>🧩 K-Map Student Assessment</h1><p>Place terms, build valid groups, and submit a minimal expression.</p><div class="specStrip" id="specStrip"><span>SESSION: <b>ACTIVE</b></span><span id="specWho"></span></div><div class="headerActions"><button class="themeToggle" onclick="toggleTheme()" style="width:auto">🌙 Dark</button><button onclick="logout()" style="width:auto">Logout</button></div></header>
+<div class="wrap"><div class="card" data-tag="Session Start"><h3 id="welcome"></h3><p class="sub">Select an assessment problem. Marks and availability are shown below.</p><select id="problem"></select><div id="selectedProblemInfo" class="msg"></div><button id="load">Start / Resume Problem</button><div id="topMsg"></div></div>
+<div class="card" data-tag="Performance"><h2>📊 My Previous Assessment Marks</h2><div id="studentSummary" class="row"></div><div id="history" style="overflow:auto"></div></div>
+<div id="assessment" class="card hidden" data-tag="Live Assessment"><div class="questionHero"><h2 id="qtitle"></h2><div id="chips" class="chips"></div><p id="qnote"></p></div>
 <div class="stepbar"><div id="s1" class="step active">1. Place Values</div><div id="s2" class="step">2. Create Groups</div><div id="s3" class="step">3. Final Answer</div></div><div id="timer" class="msg"></div><div id="instruction" class="msg"></div>
 <div class="kmapWrap"><div id="map" class="kmap"></div></div><div class="placementHelp"><span>SOP: default 0 → place 1</span><span>POS: default 1 → place 0</span><span>Don't Care: use X</span></div>
 <div id="placeActions"><button id="startGrouping">✓ Check Placement & Start Grouping</button><button id="resetPlacement" class="secondary">Reset Placement</button></div>
 <div id="groupActions" class="hidden"><div class="row"><button id="checkGroup">✓ Check This Group</button><button id="clearSel" class="secondary">Clear Selection</button></div><button id="undoGroup" class="ghost">Undo Last Group</button></div>
 <div id="feedback"></div><div id="groups"></div><div id="finalBox" class="hidden"><input id="finalAnswer" placeholder="Enter final simplified expression"><button id="submit">Submit Assessment</button></div></div></div>
-<footer class="site-footer">© 2026 Developed and Maintained by S. Alwyn Rajiv, AP/ECE</footer><script src="api.js"></script><script>
-const me=requireRole("student"),G2=["0","1"],G4=["00","01","11","10"];let P=null,ATT=null,vals=[],sel=new Set(),accepted=[],phase="place",timerID=null;welcome.textContent=`Welcome, ${me.name} (${me.registerNo})`;
+<footer class="site-footer">© 2026 Developed and Maintained by S. Alwyn Rajiv, AP/ECE</footer>
+
+<div id="reviewOverlay" class="modalOverlay hidden">
+  <div class="modalBox">
+    <div id="reviewBody"></div>
+    <div class="modalActions"><button class="secondary" onclick="closeReview()">Close</button></div>
+  </div>
+</div>
+
+<script src="api.js"></script><script>
+const me=requireRole("student"),G2=["0","1"],G4=["00","01","11","10"];let P=null,ATT=null,vals=[],sel=new Set(),accepted=[],phase="place",timerID=null;welcome.textContent=`Welcome, ${me.name} (${me.registerNo})`;specWho.innerHTML=`REG: <b>${me.registerNo}</b>`;
 function cfg(v){if(v==2)return{R:2,C:2,rl:G2,cl:G2};if(v==3)return{R:2,C:4,rl:G2,cl:G4};if(v==4)return{R:4,C:4,rl:G4,cl:G4};return{R:4,C:8,rl:G4,cl:["000","001","011","010","100","101","111","110"]}}
 function mt(v,r,c){let q=cfg(v);return parseInt(q.rl[r]+q.cl[c],2)}
 function defaults(){let q=cfg(P.variables);vals=Array(q.R*q.C).fill(P.form==="POS"?1:0)}
@@ -33,9 +42,56 @@ async function loadHistory(){try{
  let j=await api("getStudentDashboard",{token:me.token}),a=j.attempts||[],best=j.bestScores||[];
  let total=best.reduce((z,x)=>z+Number(x.score||0),0),maximum=best.reduce((z,x)=>z+Number(x.maxMarks||0),0);
  studentSummary.innerHTML=`<div class="msg"><b>${best.length}</b><br>Problems Attempted</div><div class="msg"><b>${total}/${maximum}</b><br>Total Best Marks</div>`;
- history.innerHTML=a.length?`<table><tr><th>Problem</th><th>Attempt</th><th>Marks</th><th>Result</th><th>Submitted</th></tr>${a.map(x=>`<tr><td>${x.title}</td><td>${x.attemptNo}</td><td><b>${x.score}/${x.maxMarks}</b></td><td>${x.correct?"✅ Correct":"Submitted"}</td><td>${x.submittedAt?new Date(x.submittedAt).toLocaleString():"-"}</td></tr>`).join("")}</table>`:`<div class="msg">No previous assessment submissions.</div>`;
+ history.innerHTML=a.length?`<table><tr><th>Problem</th><th>Attempt</th><th>Marks</th><th>Result</th><th>Submitted</th><th>Review</th></tr>${a.map(x=>`<tr><td>${x.title}</td><td>${x.attemptNo}</td><td><b>${x.score}/${x.maxMarks}</b></td><td>${x.correct?"✅ Correct":"Submitted"}</td><td>${x.submittedAt?new Date(x.submittedAt).toLocaleString():"-"}</td><td><button class="secondary" style="width:auto;padding:8px 14px" onclick="reviewAttempt('${x.problemId}','${x.attemptId}')">Check Mistakes</button></td></tr>`).join("")}</table>`:`<div class="msg">No previous assessment submissions.</div>`;
 }catch(e){history.innerHTML=`<div class="msg bad">${e.message}</div>`}}
 list();loadHistory();
+
+/* ---------- Review / mistake-check modal ---------- */
+async function reviewAttempt(problemId,attemptId){
+ reviewBody.innerHTML=`<div class="msg">Loading your submission...</div>`;
+ reviewOverlay.classList.remove("hidden");
+ try{
+   let d=await api("getAttemptDetail",{token:me.token,problemId,attemptId});
+   renderReview(d);
+ }catch(e){
+   reviewBody.innerHTML=`<div class="msg bad">${e.message}</div>`;
+ }
+}
+function renderReview(d){
+ let groupRows=d.groups.length?d.groups.map(g=>`<tr><td>${g.cells.map(c=>"m"+c).join(", ")}</td><td>${g.valid?("✅ "+g.term):("❌ "+(g.message||"Invalid group"))}</td></tr>`).join(""):`<tr><td colspan="2">No groups were submitted.</td></tr>`;
+ let missing=d.missingTerms.length?d.missingTerms.map(m=>"m"+m).join(", "):"None — all required minterms covered.";
+ reviewBody.innerHTML=`
+  <h3>${d.title} — Attempt ${d.attemptNo}</h3>
+  <p class="sub">Submitted: ${d.submittedAt?new Date(d.submittedAt).toLocaleString():"-"}</p>
+  <div class="reportSection">
+    <h4>Your Score</h4>
+    <p><b>${d.score}/${d.maxMarks}</b> — ${d.correct?"✅ Fully Correct":"⚠️ Needs Improvement"}</p>
+  </div>
+  <div class="reportSection">
+    <h4>Your Groups</h4>
+    <table><tr><th>Cells</th><th>Result</th></tr>${groupRows}</table>
+  </div>
+  <div class="reportSection">
+    <h4>Coverage Check</h4>
+    <p>Required minterms: ${d.targetTerms.map(m=>"m"+m).join(", ")||"None"}</p>
+    <p>Missed minterms: <b>${missing}</b></p>
+    <p>Coverage: ${d.complete?"✅ Complete":"❌ Incomplete"} &nbsp;|&nbsp; Minimum grouping: ${d.minimum?`✅ Yes (${d.minimumGroupCount} groups)`:`❌ No — you used ${d.studentGroupCount}, minimum possible is ${d.minimumGroupCount}`}</p>
+  </div>
+  <div class="reportSection">
+    <h4>Final Expression</h4>
+    <p>Your answer: <b>${d.studentFinalAnswer||"(blank)"}</b> — ${d.equivalent?"✅ Equivalent to a correct expression":"❌ Not equivalent"}</p>
+  </div>
+  ${d.revealAnswer?`
+  <div class="reportSection" style="border-color:var(--ok)">
+    <h4>✅ Correct Answer</h4>
+    <p style="font-family:var(--font-mono);font-weight:700;font-size:1.05rem">${d.correctExpression}</p>
+    <p>Correct minimal groups: ${d.correctGroups.map(g=>g.cells.map(c=>"m"+c).join("/")+" → "+g.term).join("  |  ")}</p>
+  </div>`:`
+  <div class="reportSection"><p class="sub">🔒 The correct answer has not been revealed by your instructor yet.</p></div>`}
+ `;
+}
+function closeReview(){reviewOverlay.classList.add("hidden")}
+
 load.onclick=async()=>{load.classList.add("loading");load.disabled=true;try{P=(await api("getProblem",{token:me.token,problemId:problem.value})).problem;ATT=await api("startAttempt",{token:me.token,problemId:P.problemId});defaults();phase="place";sel.clear();accepted=[];assessment.classList.remove("hidden");qtitle.textContent=P.title;chips.innerHTML=`<span class=chip>${P.variables}-Variable</span><span class=chip>${P.form}</span><span class=chip>${P.method==="dc"?"Don't Care":"Normal"}</span><span class=chip>${P.marks} Marks</span>`;const variableNames=["A","B","C","D","E"].slice(0,P.variables).join(",");
 const termText=P.terms.join(", ");
 const dcText=P.dontCares.join(", ");
