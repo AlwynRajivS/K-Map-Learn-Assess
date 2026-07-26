@@ -2,12 +2,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 </head><body><button class="themeToggle" onclick="toggleTheme()" style="position:fixed;right:12px;bottom:12px;z-index:99">🌙 Dark</button>
-<header><h1>🧩 K-Map Assessment — Admin</h1><div class="headerActions"><button onclick="logout()" style="width:auto">Logout</button></div></header><div class="wrap">
-<div class="card"><h2>Assessment Results Dashboard</h2><div id="stats" class="row"></div><div id="analysis"></div><button onclick="dashboard()" class="secondary">Refresh Dashboard</button></div>
+<header><h1>🧩 K-Map Assessment — Admin</h1><p>Control panel for problem authoring, live results, and reporting.</p><div class="specStrip" id="specStrip"><span>ROLE: <b>ADMIN</b></span><span>STATUS: <b>ONLINE</b></span><span id="specDate"></span></div><div class="headerActions"><button onclick="logout()" style="width:auto">Logout</button></div></header><div class="wrap">
+<div class="card" data-tag="Results Overview"><h2>Assessment Results Dashboard</h2><div id="stats" class="row"></div><div id="analysis"></div><button onclick="dashboard()" class="secondary">Refresh Dashboard</button></div>
 
-<div class="card"><h2>📄 Section-wise Marks Report</h2><p class="sub">Generates one PDF with a table per section: each student's problems solved, marks obtained, and marks assigned.</p><button id="reportBtn" onclick="openReport()">Preview & Download PDF Report</button><div id="reportMsg"></div></div>
+<div class="card" data-tag="Export"><h2>📄 Section-wise Marks Report</h2><p class="sub">Generates one PDF with a table per section: each student's problems solved, marks obtained, and marks assigned.</p><button id="reportBtn" onclick="openReport()">Preview & Download PDF Report</button><div id="reportMsg"></div></div>
 
-<div class="card"><h2>Create Assessment Problem</h2>
+<div class="card" data-tag="Problem Builder"><h2>Create Assessment Problem</h2>
 <div class="row"><input id="title" placeholder="Problem title"><select id="vars"><option>2</option><option selected>3</option><option>4</option><option>5</option></select></div>
 <div class="row"><select id="form"><option>SOP</option><option>POS</option></select><select id="method"><option value="normal">Normal</option><option value="dc">Don't Care</option></select></div>
 <input id="terms" placeholder="Required minterms/maxterms: 0,1,4,5"><input id="dc" placeholder="Don't cares: 2,6">
@@ -15,8 +15,8 @@
 <div class="row"><label>Assessment Start<input id="startTime" type="datetime-local"></label><label>Assessment End<input id="endTime" type="datetime-local"></label></div>
 <div class="row"><input id="maxAttempts" type="number" min="1" value="1" placeholder="Maximum Attempts"><input id="duration" type="number" min="0" value="0" placeholder="Duration in minutes (0=no timer)"></div>
 <textarea id="note" placeholder="Question instruction"></textarea><button id="save">Save Problem</button><div id="msg"></div></div>
-<div class="card"><h2>Problems</h2><button onclick="loadP()" class="secondary">Refresh</button><div id="plist"></div></div>
-<div class="card"><h2>Detailed Student Responses</h2><button onclick="loadR()" class="secondary">Refresh</button><div id="rlist" style="overflow:auto"></div></div></div>
+<div class="card" data-tag="Problem Bank"><h2>Problems</h2><p class="sub">Use <b>Reveal</b> to let students see the correct answer &amp; correct groups when they check their mistakes for that problem.</p><button onclick="loadP()" class="secondary">Refresh</button><div id="plist"></div></div>
+<div class="card" data-tag="Response Log"><h2>Detailed Student Responses</h2><button onclick="loadR()" class="secondary">Refresh</button><div id="rlist" style="overflow:auto"></div></div></div>
 
 <div id="reportOverlay" class="modalOverlay hidden">
   <div class="modalBox">
@@ -30,17 +30,80 @@
   </div>
 </div>
 
+<div id="detailOverlay" class="modalOverlay hidden">
+  <div class="modalBox">
+    <div id="detailBody"></div>
+    <div class="modalActions"><button class="secondary" onclick="closeDetail()">Close</button></div>
+  </div>
+</div>
+
 <script src="api.js"></script><script>
 const me=requireRole("admin");
-let lastReport=null;
+let lastReport=null,problemCache=[];
+specDate.textContent="BUILD: "+new Date().toLocaleDateString(undefined,{year:'numeric',month:'short',day:'2-digit'});
 
 save.onclick=async()=>{save.classList.add("loading");save.disabled=true;try{let j=await api("addProblem",{token:me.token,problem:{title:title.value,variables:+vars.value,form:form.value,method:method.value,terms:terms.value,dontCares:dc.value,marks:+marks.value,active:active.value,note:note.value,startTime:startTime.value,endTime:endTime.value,maxAttempts:+maxAttempts.value,durationMinutes:+duration.value}});msg.className="msg ok";msg.textContent="Saved "+j.problemId;loadP();dashboard()}catch(e){msg.className="msg bad";msg.textContent=e.message}finally{save.classList.remove("loading");save.disabled=false}};
 
 async function dashboard(){try{let j=await api("getDashboard",{token:me.token}),s=j.summary;stats.innerHTML=`<div class="msg"><b>${s.students}</b><br>Students</div><div class="msg"><b>${s.submissions}</b><br>Submissions</div><div class="msg"><b>${s.average}</b><br>Average Score</div><div class="msg"><b>${s.correctRate}%</b><br>Fully Correct</div>`;analysis.innerHTML="<h3>Problem-wise Analysis</h3><table><tr><th>Problem</th><th>Attempts</th><th>Average</th><th>Fully Correct</th></tr>"+j.byProblem.map(x=>`<tr><td>${x.problemId} — ${x.title}</td><td>${x.attempts}</td><td>${x.average}</td><td>${x.correct}</td></tr>`).join("")+"</table>"}catch(e){analysis.textContent=e.message}}
 
-async function loadP(){try{let j=await api("listProblems",{token:me.token,admin:true});plist.innerHTML="<table><tr><th>ID</th><th>Title</th><th>Type</th><th>Marks</th><th>Attempts</th><th>Duration</th><th>Start</th><th>End</th></tr>"+j.problems.map(x=>`<tr><td>${x.problemId}</td><td>${x.title}</td><td>${x.variables}V ${x.form}</td><td>${x.marks}</td><td>${x.maxAttempts}</td><td>${x.durationMinutes} min</td><td>${x.startTime||"-"}</td><td>${x.endTime||"-"}</td></tr>`).join("")+"</table>"}catch(e){plist.textContent=e.message}}
+async function loadP(){try{
+ let j=await api("listProblems",{token:me.token,admin:true});
+ problemCache=j.problems||[];
+ plist.innerHTML="<table><tr><th>ID</th><th>Title</th><th>Type</th><th>Marks</th><th>Attempts</th><th>Duration</th><th>Start</th><th>End</th><th>Answer</th></tr>"+j.problems.map(x=>`<tr><td>${x.problemId}</td><td>${x.title}</td><td>${x.variables}V ${x.form}</td><td>${x.marks}</td><td>${x.maxAttempts}</td><td>${x.durationMinutes} min</td><td>${x.startTime||"-"}</td><td>${x.endTime||"-"}</td><td><button class="${x.revealAnswer?"":"secondary"}" style="width:auto;padding:8px 14px" onclick="toggleReveal('${x.problemId}',${!x.revealAnswer})">${x.revealAnswer?"✅ Revealed":"🔒 Reveal"}</button></td></tr>`).join("")+"</table>"
+}catch(e){plist.textContent=e.message}}
 
-async function loadR(){try{let j=await api("listResponses",{token:me.token});rlist.innerHTML="<table><tr><th>Student</th><th>Problem</th><th>Attempt</th><th>Expression</th><th>Equivalent</th><th>Coverage</th><th>Minimum</th><th>Score</th></tr>"+j.responses.map(x=>`<tr><td>${x.registerNo} ${x.studentName}</td><td>${x.problemId}</td><td>${x.attemptNo}</td><td>${x.finalAnswer}</td><td>${x.equivalent}</td><td>${x.complete}</td><td>${x.minimum}</td><td>${x.score}/${x.maxMarks}</td></tr>`).join("")+"</table>"}catch(e){rlist.textContent=e.message}}
+async function toggleReveal(problemId,newVal){
+ try{
+   await api("toggleReveal",{token:me.token,problemId,reveal:newVal});
+   loadP();
+ }catch(e){alert(e.message)}
+}
+
+async function loadR(){try{let j=await api("listResponses",{token:me.token});rlist.innerHTML="<table><tr><th>Student</th><th>Problem</th><th>Attempt</th><th>Expression</th><th>Equivalent</th><th>Coverage</th><th>Minimum</th><th>Score</th><th>Mistakes</th></tr>"+j.responses.map(x=>`<tr><td>${x.registerNo} ${x.studentName}</td><td>${x.problemId}</td><td>${x.attemptNo}</td><td>${x.finalAnswer}</td><td>${x.equivalent}</td><td>${x.complete}</td><td>${x.minimum}</td><td>${x.score}/${x.maxMarks}</td><td><button class="secondary" style="width:auto;padding:8px 14px" onclick="viewDetail('${x.registerNo}','${x.problemId}','${x.attemptId}')">View</button></td></tr>`).join("")+"</table>"}catch(e){rlist.textContent=e.message}}
+
+/* ---------- Per-student mistake / answer viewer (always shows the correct answer to admin) ---------- */
+async function viewDetail(registerNo,problemId,attemptId){
+ detailBody.innerHTML=`<div class="msg">Loading submission...</div>`;
+ detailOverlay.classList.remove("hidden");
+ try{
+   let d=await api("getAttemptDetailAdmin",{token:me.token,registerNo,problemId,attemptId});
+   renderDetail(d,registerNo);
+ }catch(e){
+   detailBody.innerHTML=`<div class="msg bad">${e.message}</div>`;
+ }
+}
+function renderDetail(d,registerNo){
+ let groupRows=d.groups.length?d.groups.map(g=>`<tr><td>${g.cells.map(c=>"m"+c).join(", ")}</td><td>${g.valid?("✅ "+g.term):("❌ "+(g.message||"Invalid group"))}</td></tr>`).join(""):`<tr><td colspan="2">No groups were submitted.</td></tr>`;
+ let missing=d.missingTerms.length?d.missingTerms.map(m=>"m"+m).join(", "):"None — all required minterms covered.";
+ detailBody.innerHTML=`
+  <h3>${registerNo} — ${d.title} (Attempt ${d.attemptNo})</h3>
+  <p class="sub">Submitted: ${d.submittedAt?new Date(d.submittedAt).toLocaleString():"-"}</p>
+  <div class="reportSection">
+    <h4>Score</h4>
+    <p><b>${d.score}/${d.maxMarks}</b> — ${d.correct?"✅ Fully Correct":"⚠️ Needs Improvement"}</p>
+  </div>
+  <div class="reportSection">
+    <h4>Groups Submitted</h4>
+    <table><tr><th>Cells</th><th>Result</th></tr>${groupRows}</table>
+  </div>
+  <div class="reportSection">
+    <h4>Coverage Check</h4>
+    <p>Required minterms: ${d.targetTerms.map(m=>"m"+m).join(", ")||"None"}</p>
+    <p>Missed minterms: <b>${missing}</b></p>
+    <p>Coverage: ${d.complete?"✅ Complete":"❌ Incomplete"} &nbsp;|&nbsp; Minimum grouping: ${d.minimum?`✅ Yes (${d.minimumGroupCount} groups)`:`❌ No — used ${d.studentGroupCount}, minimum is ${d.minimumGroupCount}`}</p>
+  </div>
+  <div class="reportSection">
+    <h4>Final Expression</h4>
+    <p>Submitted answer: <b>${d.studentFinalAnswer||"(blank)"}</b> — ${d.equivalent?"✅ Equivalent":"❌ Not equivalent"}</p>
+  </div>
+  <div class="reportSection" style="border-color:var(--ok)">
+    <h4>✅ Correct Answer</h4>
+    <p style="font-family:var(--font-mono);font-weight:700;font-size:1.05rem">${d.correctExpression}</p>
+    <p>Correct minimal groups: ${d.correctGroups.map(g=>g.cells.map(c=>"m"+c).join("/")+" → "+g.term).join("  |  ")}</p>
+  </div>
+ `;
+}
+function closeDetail(){detailOverlay.classList.add("hidden")}
 
 async function openReport(){
   reportBtn.classList.add("loading");reportBtn.disabled=true;reportMsg.innerHTML="";
