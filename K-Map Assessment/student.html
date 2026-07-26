@@ -1,13 +1,13 @@
 <!doctype html><html lang="en" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#3e7c7c"><title>K-Map Assessment</title><link rel="stylesheet" href="style.css"></head><body>
 <header><h1>🧩 K-Map Student Assessment</h1><p>Place terms, build valid groups, and submit a minimal expression.</p><div class="specStrip" id="specStrip"><span>SESSION: <b>ACTIVE</b></span><span id="specWho"></span></div><div class="headerActions"><button class="themeToggle" onclick="toggleTheme()" style="width:auto">🌙 Dark</button><button onclick="logout()" style="width:auto">Logout</button></div></header>
 <div class="wrap"><div class="card" data-tag="Session Start"><h3 id="welcome"></h3><p class="sub">Select an assessment problem. Marks and availability are shown below.</p><select id="problem"></select><div id="selectedProblemInfo" class="msg"></div><button id="load">Start / Resume Problem</button><div id="topMsg"></div></div>
-<div class="card" data-tag="Performance"><h2>📊 My Previous Assessment Marks</h2><div id="studentSummary" class="row"></div><div id="historyList" style="overflow:auto"></div></div>
 <div id="assessment" class="card hidden" data-tag="Live Assessment"><div class="questionHero"><h2 id="qtitle"></h2><div id="chips" class="chips"></div><p id="qnote"></p></div>
 <div class="stepbar"><div id="s1" class="step active">1. Place Values</div><div id="s2" class="step">2. Create Groups</div><div id="s3" class="step">3. Final Answer</div></div><div id="timer" class="msg"></div><div id="instruction" class="msg"></div>
 <div class="kmapWrap"><div id="map" class="kmap"></div></div><div class="placementHelp"><span>SOP: default 0 → place 1</span><span>POS: default 1 → place 0</span><span>Don't Care: use X</span></div>
 <div id="placeActions"><button id="startGrouping">✓ Check Placement & Start Grouping</button><button id="resetPlacement" class="secondary">Reset Placement</button></div>
 <div id="groupActions" class="hidden"><div class="row"><button id="checkGroup">✓ Check This Group</button><button id="clearSel" class="secondary">Clear Selection</button></div><button id="undoGroup" class="ghost">Undo Last Group</button></div>
 <div id="feedback"></div><div id="groups"></div><div id="finalBox" class="hidden"><input id="finalAnswer" placeholder="Enter final simplified expression"><button id="submit">Submit Assessment</button></div></div></div>
+<div class="card" data-tag="Performance"><h2>📊 My Previous Assessment Marks</h2><div id="studentSummary" class="row"></div><div id="historyList" style="overflow:auto"></div></div></div>
 <footer class="site-footer">© 2026 Developed and Maintained by S. Alwyn Rajiv, AP/ECE</footer>
 
 <div id="reviewOverlay" class="modalOverlay hidden">
@@ -58,12 +58,79 @@ async function reviewAttempt(problemId,attemptId){
    reviewBody.innerHTML=`<div class="msg bad">${e.message}</div>`;
  }
 }
+function questionBlockHTML(d,terms,dontCares,label){
+ let names=["A","B","C","D","E"].slice(0,d.variables).join(",");
+ let termText=terms.join(", "),dcText=dontCares.join(", ");
+ let fn=d.form==="SOP"
+   ?`F(${names}) = Σm(${termText})${dontCares.length?` + d(${dcText})`:""}`
+   :`F(${names}) = ΠM(${termText})${dontCares.length?` + d(${dcText})`:""}`;
+ return `<div class="questionHero" style="margin-bottom:14px">
+   <div class="questionLabel">${label||"QUESTION"}</div>
+   <div class="questionText">${d.variables}-Variable ${d.form} — simplify using a K-Map.</div>
+   <div class="booleanFunction">${fn}</div>
+ </div>`;
+}
+const REVIEW_PALETTE=["#0e7c86","#b4820a","#8855cc","#c73535","#2f9e44","#1f6feb","#d6336c"];
+function kmapVisualHTML(d){
+ let q=cfg(d.variables);
+ let vals=Array(q.R*q.C).fill(d.form==="POS"?1:0);
+ for(let i=0;i<vals.length;i++){
+   let r=Math.floor(i/q.C),c=i%q.C,m=mt(d.variables,r,c);
+   if(d.targetDontCares.includes(m))vals[i]="X";
+   else if(d.targetTerms.includes(m))vals[i]=d.form==="SOP"?1:0;
+ }
+ let cellColor={};
+ d.groups.filter(g=>g.valid).forEach((g,gi)=>{
+   let color=REVIEW_PALETTE[gi%REVIEW_PALETTE.length];
+   g.cells.forEach(m=>{(cellColor[m]=cellColor[m]||[]).push(color)});
+ });
+ let cells="";
+ for(let r=0;r<q.R;r++)for(let c=0;c<q.C;c++){
+   let i=r*q.C+c,m=mt(d.variables,r,c),v=vals[i],colors=cellColor[m]||[];
+   let ring=colors.length?`box-shadow:inset 0 0 0 3px ${colors[0]}${colors.length>1?`, inset 0 0 0 6px ${colors[1]}`:""}`:"";
+   cells+=`<div class="cell ${v===1?"v1":v==="X"?"vX":""}" style="${ring}"><span class="m">m${m}</span><span>${v}</span></div>`;
+ }
+ let legend=d.groups.filter(g=>g.valid).map((g,gi)=>`<span class="tag" style="border-color:${REVIEW_PALETTE[gi%REVIEW_PALETTE.length]};color:${REVIEW_PALETTE[gi%REVIEW_PALETTE.length]}">${g.term}</span>`).join("");
+ return `<div class="kmapWrap"><div class="kmap" style="grid-template-columns:repeat(${q.C},minmax(46px,1fr))">${cells}</div></div>${legend?`<div style="margin-top:6px">${legend}</div>`:`<p class="sub">No valid groups to highlight.</p>`}`;
+}
+function functionTextFor(d){
+ let names=["A","B","C","D","E"].slice(0,d.variables).join(",");
+ let termText=d.targetTerms.join(", "),dcText=d.targetDontCares.join(", ");
+ return d.form==="SOP"
+  ? `F(${names}) = Σm(${termText})${d.targetDontCares.length?` + d(${dcText})`:""}`
+  : `F(${names}) = ΠM(${termText})${d.targetDontCares.length?` + d(${dcText})`:""}`;
+}
+function buildMiniKmap(d){
+ let palette=["#0e7c86","#b4820a","#7c3aed","#2563eb","#c73535","#0d9488","#be185d","#65a30d"];
+ let validGroups=d.groups.filter(g=>g.valid);
+ let q=cfg(d.variables),cells="";
+ for(let r=0;r<q.R;r++)for(let c=0;c<q.C;c++){
+   let m=mt(d.variables,r,c),isTerm=d.targetTerms.includes(m),isDC=d.targetDontCares.includes(m),missed=isTerm&&!d.coveredTerms.includes(m);
+   let cls="cell "+(isTerm?"v1":isDC?"vX":"");
+   let myGroups=validGroups.map((g,i)=>g.cells.includes(m)?i:-1).filter(i=>i>=0);
+   let ring=myGroups.length?`box-shadow:${myGroups.map(i=>`0 0 0 3px ${palette[i%palette.length]}`).join(",")};`:"";
+   let outline=missed?"outline:3px solid var(--bad);outline-offset:-6px;":"";
+   let val=isDC?"X":(isTerm?1:0);
+   let dots=myGroups.map(i=>`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;margin:0 1.5px;background:${palette[i%palette.length]}"></span>`).join("");
+   cells+=`<button type="button" class="${cls}" style="${ring}${outline}pointer-events:none" tabindex="-1"><span class="m">m${m}</span><span>${val}</span>${dots?`<span style="position:absolute;bottom:6px;left:0;right:0;text-align:center">${dots}</span>`:""}</button>`;
+ }
+ let legend=validGroups.length?`<div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:12px">${validGroups.map((g,i)=>`<span style="display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:12.5px;font-weight:600;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:5px 10px"><span style="width:10px;height:10px;border-radius:50%;background:${palette[i%palette.length]};display:inline-block"></span>${g.term} → ${g.cells.map(c=>"m"+c).join(", ")}</span>`).join("")}</div>`:"";
+ return `<div class="kmapWrap"><div class="kmap" style="grid-template-columns:repeat(${q.C},minmax(64px,1fr))">${cells}</div></div>${legend}<p class="sub" style="text-align:center;margin-top:10px">🔴 Red outline = a required minterm your groups didn't cover. Matching colored dots/rings show which group covers a cell.</p>`;
+}
 function renderReview(d){
  let groupRows=d.groups.length?d.groups.map(g=>`<tr><td>${g.cells.map(c=>"m"+c).join(", ")}</td><td>${g.valid?("✅ "+g.term):("❌ "+(g.message||"Invalid group"))}</td></tr>`).join(""):`<tr><td colspan="2">No groups were submitted.</td></tr>`;
  let missing=d.missingTerms.length?d.missingTerms.map(m=>"m"+m).join(", "):"None — all required minterms covered.";
  reviewBody.innerHTML=`
   <h3>${d.title} — Attempt ${d.attemptNo}</h3>
   <p class="sub">Submitted: ${d.submittedAt?new Date(d.submittedAt).toLocaleString():"-"}</p>
+  <div class="reportSection">
+    <h4>Question</h4>
+    <div class="booleanFunction" style="font-size:1rem">${functionTextFor(d)}</div>
+  </div>
+  <div class="reportSection">
+    <h4>Your K-Map</h4>
+    ${buildMiniKmap(d)}
+  </div>
   <div class="reportSection">
     <h4>Your Score</h4>
     <p><b>${d.score}/${d.maxMarks}</b> — ${d.correct?"✅ Fully Correct":"⚠️ Needs Improvement"}</p>
@@ -110,6 +177,6 @@ resetPlacement.onclick=()=>{defaults();render()};
 startGrouping.onclick=async()=>{startGrouping.classList.add("loading");try{let x=placed(),j=await api("checkPlacement",{token:me.token,problemId:P.problemId,attemptId:ATT.attemptId,terms:x.terms,dontCares:x.dontCares});if(!j.correct){feedback.className="msg bad";feedback.textContent="❌ "+j.message;return}phase="group";feedback.className="msg ok";feedback.textContent="✓ Placement correct. Now create the largest valid groups.";placeActions.classList.add("hidden");groupActions.classList.remove("hidden");finalBox.classList.remove("hidden");s1.classList.remove("active");s2.classList.add("active");render()}catch(e){feedback.className="msg bad";feedback.textContent=e.message}finally{startGrouping.classList.remove("loading")}};
 checkGroup.onclick=async()=>{checkGroup.classList.add("loading");try{let q=cfg(P.variables),g=[...sel].map(i=>mt(P.variables,Math.floor(i/q.C),i%q.C)),j=await api("checkGroup",{token:me.token,problemId:P.problemId,attemptId:ATT.attemptId,group:g});if(j.valid){accepted.push(g);feedback.className="msg ok";feedback.textContent="🎉 Correct group → "+j.term;groups.innerHTML+=`<span class=tag>${g.map(x=>"m"+x).join(", ")} → ${j.term}</span>`;sel.clear();render()}else{feedback.className="msg bad";feedback.textContent="❌ "+j.message}}catch(e){feedback.className="msg bad";feedback.textContent=e.message}finally{checkGroup.classList.remove("loading")}};
 clearSel.onclick=()=>{sel.clear();render()};undoGroup.onclick=()=>{accepted.pop();groups.lastElementChild?.remove()};finalAnswer.onfocus=()=>{s2.classList.remove("active");s3.classList.add("active")};
-submit.onclick=async()=>{submit.classList.add("loading");submit.disabled=true;try{let j=await api("submitAssessment",{token:me.token,problemId:P.problemId,attemptId:ATT.attemptId,groups:accepted,finalAnswer:finalAnswer.value});clearInterval(timerID);feedback.className="msg "+(j.correct?"ok":"bad");feedback.innerHTML=`<b>Submitted — Score: ${j.score}/${j.maxMarks}</b><br>Expression Equivalent: ${j.equivalent?"Yes":"No"} | Coverage: ${j.complete?"Complete":"Incomplete"} | Minimum Grouping: ${j.minimum?"Yes":"No"}`;checkGroup.disabled=true;loadHistory();list()}catch(e){feedback.className="msg bad";feedback.textContent=e.message;submit.disabled=false}finally{submit.classList.remove("loading")}};
+submit.onclick=async()=>{submit.classList.add("loading");submit.disabled=true;try{let j=await api("submitAssessment",{token:me.token,problemId:P.problemId,attemptId:ATT.attemptId,groups:accepted,finalAnswer:finalAnswer.value});clearInterval(timerID);feedback.className="msg "+(j.correct?"ok":"bad");feedback.innerHTML=`<b>Submitted — Score: ${j.score}/${j.maxMarks}</b><br>Expression Equivalent: ${j.equivalent?"Yes":"No"} | Coverage: ${j.complete?"Complete":"Incomplete"} | Minimum Grouping: ${j.minimum?"Yes":"No"}`;checkGroup.disabled=true;loadHistory();list();setTimeout(()=>{assessment.classList.add("hidden");window.scrollTo({top:0,behavior:"smooth"})},1200)}catch(e){feedback.className="msg bad";feedback.textContent=e.message;submit.disabled=false}finally{submit.classList.remove("loading")}};
 function startTimer(d){clearInterval(timerID);if(!d){timer.textContent="No time limit.";return}function t(){let z=new Date(d)-new Date();if(z<=0){clearInterval(timerID);timer.textContent="Time expired.";return}timer.textContent=`⏱ Time Remaining: ${Math.floor(z/60000)}:${String(Math.floor(z%60000/1000)).padStart(2,"0")}`}t();timerID=setInterval(t,1000)}
 </script></body></html>
