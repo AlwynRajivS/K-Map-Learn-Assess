@@ -1,7 +1,7 @@
 <!doctype html><html lang="en" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#3e7c7c"><title>K-Map Assessment</title><link rel="stylesheet" href="style.css"></head><body>
 <header><h1>🧩 K-Map Student Assessment</h1><p>Place terms, build valid groups, and submit a minimal expression.</p><div class="specStrip" id="specStrip"><span>SESSION: <b>ACTIVE</b></span><span id="specWho"></span></div><div class="headerActions"><button class="themeToggle" onclick="toggleTheme()" style="width:auto">🌙 Dark</button><button onclick="logout()" style="width:auto">Logout</button></div></header>
 <div class="wrap"><div class="card" data-tag="Session Start"><h3 id="welcome"></h3><p class="sub">Select an assessment problem. Marks and availability are shown below.</p><select id="problem"></select><div id="selectedProblemInfo" class="msg"></div><button id="load">Start / Resume Problem</button><div id="topMsg"></div></div>
-<div class="card" data-tag="Performance"><h2>📊 My Previous Assessment Marks</h2><div id="studentSummary" class="row"></div><div id="history" style="overflow:auto"></div></div>
+<div class="card" data-tag="Performance"><h2>📊 My Previous Assessment Marks</h2><div id="studentSummary" class="row"></div><div id="historyList" style="overflow:auto"></div></div>
 <div id="assessment" class="card hidden" data-tag="Live Assessment"><div class="questionHero"><h2 id="qtitle"></h2><div id="chips" class="chips"></div><p id="qnote"></p></div>
 <div class="stepbar"><div id="s1" class="step active">1. Place Values</div><div id="s2" class="step">2. Create Groups</div><div id="s3" class="step">3. Final Answer</div></div><div id="timer" class="msg"></div><div id="instruction" class="msg"></div>
 <div class="kmapWrap"><div id="map" class="kmap"></div></div><div class="placementHelp"><span>SOP: default 0 → place 1</span><span>POS: default 1 → place 0</span><span>Don't Care: use X</span></div>
@@ -30,20 +30,21 @@ function showProblemInfo(){
  let x=problemCache.find(p=>p.problemId===problem.value);
  if(!x){selectedProblemInfo.textContent="No active assessment problems.";load.disabled=true;return}
  let st=x.status||"AVAILABLE";
- selectedProblemInfo.innerHTML=`<b>${x.title}</b> • ${x.variables}-Variable ${x.form} • <b>${x.marks} Marks</b> • <span class="badge ${st}">${st}</span>`;
+ let attemptsNote=x.maxAttempts?` • Attempts used: <b>${x.completedAttempts||0}/${x.maxAttempts}</b>`:"";
+ selectedProblemInfo.innerHTML=`<b>${x.title}</b> • ${x.variables}-Variable ${x.form} • <b>${x.marks} Marks</b> • <span class="badge ${st}">${st}</span>${attemptsNote}${st==="COMPLETED"?` <br><span class="sub">🔒 You've used all your attempts for this problem.</span>`:""}`;
  load.disabled=(st!=="AVAILABLE");
 }
 async function list(){try{
  let j=await api("listProblems",{token:me.token});problemCache=j.problems||[];
- problem.innerHTML=problemCache.length?problemCache.map(x=>`<option value="${x.problemId}">${x.title} — ${x.variables}V ${x.form} — ${x.marks} Marks — ${x.status||"AVAILABLE"}</option>`).join(""):`<option value="">No active problems</option>`;
+ problem.innerHTML=problemCache.length?problemCache.map(x=>`<option value="${x.problemId}">${x.title} — ${x.variables}V ${x.form} — ${x.marks} Marks — ${x.status||"AVAILABLE"}${x.maxAttempts?` (${x.completedAttempts||0}/${x.maxAttempts} attempts used)`:""}</option>`).join(""):`<option value="">No active problems</option>`;
  problem.onchange=showProblemInfo;showProblemInfo();
 }catch(e){topMsg.className="msg bad";topMsg.textContent=e.message}}
 async function loadHistory(){try{
  let j=await api("getStudentDashboard",{token:me.token}),a=j.attempts||[],best=j.bestScores||[];
  let total=best.reduce((z,x)=>z+Number(x.score||0),0),maximum=best.reduce((z,x)=>z+Number(x.maxMarks||0),0);
  studentSummary.innerHTML=`<div class="msg"><b>${best.length}</b><br>Problems Attempted</div><div class="msg"><b>${total}/${maximum}</b><br>Total Best Marks</div>`;
- history.innerHTML=a.length?`<table><tr><th>Problem</th><th>Attempt</th><th>Marks</th><th>Result</th><th>Submitted</th><th>Review</th></tr>${a.map(x=>`<tr><td>${x.title}</td><td>${x.attemptNo}</td><td><b>${x.score}/${x.maxMarks}</b></td><td>${x.correct?"✅ Correct":"Submitted"}</td><td>${x.submittedAt?new Date(x.submittedAt).toLocaleString():"-"}</td><td><button class="secondary" style="width:auto;padding:8px 14px" onclick="reviewAttempt('${x.problemId}','${x.attemptId}')">Check Mistakes</button></td></tr>`).join("")}</table>`:`<div class="msg">No previous assessment submissions.</div>`;
-}catch(e){history.innerHTML=`<div class="msg bad">${e.message}</div>`}}
+ historyList.innerHTML=a.length?`<table><tr><th>Problem</th><th>Attempt</th><th>Marks</th><th>Result</th><th>Submitted</th><th>Review</th></tr>${a.map(x=>`<tr><td>${x.title}</td><td>${x.attemptNo}</td><td><b>${x.score}/${x.maxMarks}</b></td><td>${x.correct?"✅ Correct":"Submitted"}</td><td>${x.submittedAt?new Date(x.submittedAt).toLocaleString():"-"}</td><td>${x.revealAnswer?`<button class="secondary" style="width:auto;padding:8px 14px" onclick="reviewAttempt('${x.problemId}','${x.attemptId}')">Check Mistakes</button>`:`<button class="secondary" style="width:auto;padding:8px 14px;opacity:.6;cursor:not-allowed" disabled title="Your instructor hasn't revealed the answer for this problem yet">🔒 Locked</button>`}</td></tr>`).join("")}</table>`:`<div class="msg">No previous assessment submissions.</div>`;
+}catch(e){historyList.innerHTML=`<div class="msg bad">${e.message}</div>`}}
 list();loadHistory();
 
 /* ---------- Review / mistake-check modal ---------- */
